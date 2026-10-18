@@ -335,3 +335,22 @@ assert(editor.shadowRoot.innerHTML.includes('data-select="performance_mode"'));
 editor._change("performance_mode","eco");
 assert.equal(editor.event.detail.config.performance_mode,"eco");
 console.log("Adaptive FPS, cached grid and unrelated HA update guard tests passed.");
+
+const avgWindowAttributes=JSON.parse(JSON.stringify(attributes));
+avgWindowAttributes.weather_samples.kauno.wind_window="15m";
+avgWindowAttributes.weather_samples.kauno.wind_kmh=14.5;
+card.setConfig({type:"custom:lt72-weather-map",layer:"wind"});
+card.hass={states:{"sensor.lt72_weather_map":{
+ entity_id:"sensor.lt72_weather_map",state:"ok",
+ last_updated:"2026-10-18T21:44:00+03:00",attributes:avgWindowAttributes
+}},locale:{language:"lt-LT"}};
+assert(card.shadowRoot.innerHTML.includes("14.5 km/h (15 min)"));
+assert(card.shadowRoot.innerHTML.includes("15 min. modelio vid."));
+avgWindowAttributes.weather_samples.kauno.wind_window="current";
+card.hass={states:{"sensor.lt72_weather_map":{
+ entity_id:"sensor.lt72_weather_map",state:"ok",
+ last_updated:"2026-10-18T21:45:00+03:00",attributes:avgWindowAttributes
+}},locale:{language:"lt-LT"}};
+assert(!card.shadowRoot.innerHTML.includes("14.5 km/h (15 min)"));
+assert(card.shadowRoot.innerHTML.includes("modelis dabar"));
+console.log("Recent-model 15-minute wind averaging/fallback labels passed.");

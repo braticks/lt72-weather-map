@@ -668,9 +668,10 @@ class LT72WeatherMapCard extends HTMLElement {
            '</g></g>';
        }
        if(this._show("show_weather_labels")){
+         const windText=w.wind_kmh+" km/h"+(w.wind_window==="15m"?" (15 min)":"");
          shapes+='<text class="weather-label" x="'+s.x.toFixed(1)+
            '" y="'+(s.y+26).toFixed(1)+'" text-anchor="middle">'+
-           WMAP_ESC(w.wind_kmh+" km/h")+'</text>';
+           WMAP_ESC(windText)+'</text>';
        }
      }
      if(mode==="snow" && this._show("show_weather_labels") && wmapIsSnowForecast(w)){
@@ -736,7 +737,8 @@ class LT72WeatherMapCard extends HTMLElement {
      '" type="button">'+WMAP_ESC(m[1])+'</button>').join("");
    const weatherInfo=weatherReady&&forecast?
      '<div class="weather-details">'+
-       '<span>💨 '+WMAP_ESC(forecast.wind_kmh)+' km/h</span>'+
+       '<span>💨 '+WMAP_ESC(forecast.wind_kmh)+' km/h'+
+         (forecast.wind_window==="15m"?' (15 min. modelio vid.)':' (modelis dabar)')+'</span>'+
        '<span>Gūsiai '+WMAP_ESC(forecast.gust_kmh)+' km/h</span>'+
        '<span>❄ '+WMAP_ESC(forecast.snow_cm)+' cm</span>'+
        '<span>🌧 '+WMAP_ESC(forecast.precip_mm)+' mm</span>'+

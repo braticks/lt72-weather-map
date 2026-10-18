@@ -91,7 +91,7 @@ def parse_radar(data: object) -> dict:
 
 
 class LT72WeatherCoordinator(DataUpdateCoordinator[dict]):
-    """One minute status, 10 min forecasts, 5 min radar metadata."""
+    """One minute status, 15 min forecasts, 5 min radar metadata."""
 
     def __init__(self, hass) -> None:
         super().__init__(
@@ -122,7 +122,7 @@ class LT72WeatherCoordinator(DataUpdateCoordinator[dict]):
             _LOGGER.warning("LT72 alerts unavailable: %s", exc)
 
         if (self._weather_time is None
-                or now - self._weather_time >= timedelta(minutes=10)):
+                or now - self._weather_time >= timedelta(minutes=15)):
             self._weather_time = now
             try:
                 rows = list(METEO_POINTS.values())

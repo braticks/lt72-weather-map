@@ -50,6 +50,21 @@ assert.equal(vm.runInContext("wmapTemperatureLabel(0)",ctx),"0°");
 assert.equal(vm.runInContext("wmapTemperatureLabel(null)",ctx),null);
 assert.equal(vm.runInContext("wmapTemperatureLabel(undefined)",ctx),null);
 assert.equal(vm.runInContext("WMAP_MAIN_CITIES.length",ctx),6);
+const ecoPreset=vm.runInContext("wmapPerformancePreset('eco',8,8)",ctx);
+const smoothPreset=vm.runInContext("wmapPerformancePreset('smooth',8,8)",ctx);
+const autoLow=vm.runInContext("wmapPerformancePreset('auto',4,2)",ctx);
+const autoHigh=vm.runInContext("wmapPerformancePreset('auto',8,8)",ctx);
+assert.equal(ecoPreset.fps,15);
+assert.equal(smoothPreset.fps,30);
+assert.equal(autoLow.fps,15);
+assert(autoHigh.fps>15&&autoHigh.fps<=30);
+assert(ecoPreset.density<autoHigh.density&&autoHigh.density<smoothPreset.density);
+ctx.precomp={kauno:{wind_kmh:20,wind_from_deg:270}};
+ctx.grid=vm.runInContext("wmapBuildWindGrid(precomp)",ctx);
+ctx.gridPos=vm.runInContext("wmapProjection().xy(23.9036,54.8985)",ctx);
+const gridSample=vm.runInContext("wmapSampleWindGrid(grid,gridPos[0],gridPos[1])",ctx);
+assert(gridSample&&gridSample.vx>0&&gridSample.speed>10);
+assert.equal(vm.runInContext("wmapSampleWindGrid(null,200,200)",ctx),null);
 assert.equal(vm.runInContext("WMAP_EXTRA_CITY_POINTS.length",ctx),1);
 assert.equal(vm.runInContext('WMAP_EXTRA_CITY_POINTS[0][1]',ctx),"Biržai");
 assert.equal(new Set(paths.map(x=>x.key)).size,10);
@@ -304,3 +319,19 @@ const birzaiPosition=vm.runInContext("wmapProjection().xy(24.7567,56.2045)",ctx)
 assert(birzaiPosition[0]>0&&birzaiPosition[0]<760);
 assert(birzaiPosition[1]>0&&birzaiPosition[1]<444);
 console.log("Biržai independent weather sample and overlay position verified.");
+
+let actualRenders=0;
+const nativeRender=card._render.bind(card);
+card._render=(...args)=>{actualRenders++;return nativeRender(...args);};
+const lastHass=card._hass;
+const hassWithOtherEntity={...lastHass,states:{...lastHass.states,
+ "sensor.unrelated":{entity_id:"sensor.unrelated",state:"on",attributes:{}}}};
+card.hass=hassWithOtherEntity;
+const afterNewHass=actualRenders;
+card.hass={...hassWithOtherEntity,states:{...hassWithOtherEntity.states,
+ "sensor.unrelated":{entity_id:"sensor.unrelated",state:"off",attributes:{}}}};
+assert.equal(actualRenders,afterNewHass,"Unrelated sensor changes should not rebuild the map");
+assert(editor.shadowRoot.innerHTML.includes('data-select="performance_mode"'));
+editor._change("performance_mode","eco");
+assert.equal(editor.event.detail.config.performance_mode,"eco");
+console.log("Adaptive FPS, cached grid and unrelated HA update guard tests passed.");

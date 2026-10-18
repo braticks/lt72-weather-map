@@ -15,7 +15,7 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
 - **📍 Mano vieta** – rodo būtent dashboardą atidariusio telefono / planšetės / kompiuterio vietą. Vietos nustatymo prašoma tik paspaudus mygtuką; pakartotinai atidarius ir turint iš anksto suteiktą leidimą, ji gali būti įjungiama automatiškai. Vietos koordinatės naudojamos tik naršyklėje, nesiunčiamos į Home Assistant serverį. **Reikalinga HTTPS prieiga** arba kita naršyklės laikoma saugia aplinka; vietinis HTTP IP adresas paprastai neveiks.
 
-**Versija:** [v0.5.4](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.4) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.5](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.5) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -33,7 +33,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.4`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.5`.
 
 ## Saugumas ir informacija
 
@@ -154,3 +154,23 @@ city_temperature_set: main   # main | all
 ### v0.5.4 – Biržų temperatūra
 
 **Biržai** pridėti kaip papildomas 11-as temperatūros taškas. Net esant režimui `city_temperature_set: main` rodomos šešių vietovių temperatūros: Vilnius, Kaunas, Klaipėda, Šiauliai, Panevėžys **ir Biržai**. Režimas `all` rodo 10 apskričių centrų ir Biržus (11 vietovių). Biržų duomenys užsakomi atskirai pagal miesto koordinates (56.2045, 24.7567), nenaudojant Panevėžio temperatūros kaip pakaitalo. Tai Open-Meteo modelio temperatūra maždaug kas 10 minučių.
+
+### v0.5.5 – našumo optimizavimas
+
+- **Open-Meteo vėjas, sniegas ir miestų temperatūros** atnaujinamos kas 15 min. (anksčiau – 10).
+- **RainViewer radaro kadrai** atnaujinami kas 5 min.; **EUMETSAT palydovo vaizdas** – kas 15 min.; **LT72 perspėjimai** – kas minutę.
+- Vėjo laukas iš anksto apskaičiuojamas į mažą **vektorių tinklelį**; dalelių animacija nebekartoja apskričių projekcijų ir trigonometrijos kiekvienam kadrui.
+- Ignoruojami nesusijusių Home Assistant sensorių pokyčiai ir nepasikeitę žemėlapio duomenys – visas SVG nebėra be reikalo atkuriamas.
+- **IntersectionObserver** sustabdo animaciją, kai korta už ekrano ribų, o **visibilitychange** – kai naršyklės skirtukas paslėptas. Grįžus animacija tęsiama.
+- UI pasirinkimai: **Automatinis** (pagal įrenginio resursus, 15–24 FPS), **Taupus** (15 FPS), **Sklandus** (30 FPS). Esant OS sumažinto judesio nustatymui animacija išjungta.
+- Silpnesnei planšetei ar Android TV rekomenduojamas `performance_mode: eco`; tai nemažina radarų ar temperatūrų duomenų tikslumo.
+
+```yaml
+type: custom:lt72-weather-map
+layer: wind
+performance_mode: auto    # auto | eco | smooth
+wind_particles: medium  # low | medium | high
+animated_wind: true
+```
+
+Po atnaujinimo verta patikrinti našumą tikrame kompiuteryje, telefone ir senesnėje planšetėje. Automatiniai testai patikrina logiką, ne realius FPS.

@@ -42,6 +42,7 @@ const WMAP_MODES=[
  ["snow","❄️ Sniegas"],["satellite","☁️ Palydovas"],["all","🌦️ Visi"],["none","🗺️ Tik pavojus"]
 ];
 // Local, lightweight basemaps; no third-party tile account or API key needed.
+const WMAP_PERFORMANCE_MODES=[["auto","Automatinis (15–30 FPS)"],["eco","Taupus (15 FPS)"],["smooth","Sklandus (30 FPS)"]];
 const WMAP_WIND_VISIBILITY=[
  ["normal","Normalus"],
  ["strong","Ryškus (rekomenduojama)"],
@@ -203,6 +204,49 @@ function wmapWindStyle(theme,visibility){
    density:mode==="vivid"?1.30:1.0
  };
 }
+function wmapPerformancePreset(mode,cores=8,memory=8) {
+ const c=Number.isFinite(cores)?cores:8;
+ const m=Number.isFinite(memory)?memory:8;
+ if(mode==="eco"||(mode!=="smooth"&&(c<=4||m<=3)))return {fps:15,density:.52,blur:false};
+ if(mode==="smooth")return {fps:30,density:1,blur:true};
+ return {fps:24,density:.72,blur:false};
+}
+// Build wind vector samples and precompute a small grid once per sensor update.
+// Each particle then reads only 4 cached grid cells per frame.
+function wmapBuildWindGrid(samples,step=28){
+ const projection=wmapProjection();
+ const stations=WMAP_REGIONS.map(r=>{
+   const sample=samples?.[r[0]];
+   const speed=Number(sample?.wind_kmh),direction=Number(sample?.wind_from_deg);
+   if(!sample||!Number.isFinite(speed)||speed<0||!Number.isFinite(direction))return null;
+   const [x,y]=projection.xy(r[3],r[4]);
+   const angle=(direction+180)*Math.PI/180;
+   return {x,y,vx:Math.sin(angle)*speed,vy:-Math.cos(angle)*speed};
+ }).filter(Boolean);
+ const cols=Math.ceil(760/step)+1,rows=Math.ceil(444/step)+1,values=[];
+ for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
+   const x=gx*step,y=gy*step;
+   let vx=0,vy=0,total=0;
+   for(const p of stations){
+     const dist2=(p.x-x)**2+(p.y-y)**2;
+     const weight=1/Math.max(600,dist2);
+     vx+=p.vx*weight;vy+=p.vy*weight;total+=weight;
+   }
+   values.push(total?[vx/total,vy/total]:[0,0]);
+ }
+ return {cols,rows,step,values};
+}
+function wmapSampleWindGrid(grid,x,y){
+ if(!grid?.values?.length)return null;
+ const gx=Math.min(grid.cols-1.000001,Math.max(0,x/grid.step));
+ const gy=Math.min(grid.rows-1.000001,Math.max(0,y/grid.step));
+ const ix=Math.floor(gx),iy=Math.floor(gy),fx=gx-ix,fy=gy-iy,n=iy*grid.cols+ix;
+ const a=grid.values[n],b=grid.values[n+1],c=grid.values[n+grid.cols],d=grid.values[n+grid.cols+1];
+ if(!a||!b||!c||!d)return null;
+ const vx=a[0]*(1-fx)*(1-fy)+b[0]*fx*(1-fy)+c[0]*(1-fx)*fy+d[0]*fx*fy;
+ const vy=a[1]*(1-fx)*(1-fy)+b[1]*fx*(1-fy)+c[1]*(1-fx)*fy+d[1]*fx*fy;
+ return {vx,vy,speed:Math.hypot(vx,vy)};
+}
 function wmapWindMotion(speed){
  const value=Number(speed);
  if(!Number.isFinite(value)||value<0.6) return {pixelsPerSecond:0,trailLength:0,alpha:0,lineWidth:0};
@@ -255,7 +299,7 @@ function wmapSatelliteUrl(proj=wmapProjection(),now=Date.now(),style="ir") {
    LAYERS:layer,STYLES:"",
    CRS:"EPSG:3857",BBOX:proj.bbox3857.map(v=>v.toFixed(1)).join(","),
    WIDTH:"760",HEIGHT:"444",FORMAT:"image/png",TRANSPARENT:"true",
-   _t:String(Math.floor(now/600000)) // Refresh the WMS image roughly every 10 min.
+   _t:String(Math.floor(now/900000)) // Refresh the WMS image roughly every 15 min.
  });
  return "https://view.eumetsat.int/geoserver/wms?"+params.toString();
 }
@@ -313,6 +357,8 @@ class LT72WeatherMapCard extends HTMLElement {
    this._devicePosition=null;this._geolocationError="";
    this._geolocationWatchId=null;this._checkedGeoPermission=false;
    this._satelliteError=false;this._satelliteBucket=null;
+   this._hassSignature=null;this._windInViewport=true;
+   this._windObserver=null;this._windPageListener=null;
  }
  static getStubConfig(){return {type:"custom:lt72-weather-map"};}
  static getConfigElement(){return document.createElement("lt72-weather-map-editor");}
@@ -327,17 +373,52 @@ class LT72WeatherMapCard extends HTMLElement {
    if(!WMAP_MODES.some(m=>m[0]===this._mode))this._mode="radar";
    this._render();
  }
- set hass(value){this._hass=value;this._render();}
+ set hass(value){
+   this._hass=value;
+   const entity=this._entity(),a=entity?.attributes||{};
+   // Ignore unrelated HA entity updates and the refreshed_at timestamp.
+   const signature=JSON.stringify([
+     entity?.entity_id,entity?.state,a.apskritis,a.apskritys,
+     a.alerts_available,a.weather_samples,a.weather_available,
+     a.radar,a.radar_available,a.errors
+   ]);
+   if(signature===this._hassSignature)return;
+   this._hassSignature=signature;
+   this._render();
+ }
  getCardSize(){return 7;}
  getGridOptions(){return {columns:12,min_rows:5,max_rows:12};}
  _show(option){return this._config[option]!==false;}
  connectedCallback(){
+   if(typeof IntersectionObserver!=="undefined"&&!this._windObserver){
+     this._windObserver=new IntersectionObserver(entries=>{
+       const visible=!!entries[0]?.isIntersecting;
+       if(this._windInViewport===visible)return;
+       this._windInViewport=visible;
+       if(visible)this._resumeWindAnimation();
+       else this._stopWindAnimation();
+     },{threshold:.01});
+     this._windObserver.observe(this);
+   }
+   if(typeof document!=="undefined"&&document.addEventListener&&!this._windPageListener){
+     this._windPageListener=()=>{
+       if(document.hidden)this._stopWindAnimation();
+       else this._resumeWindAnimation();
+     };
+     document.addEventListener("visibilitychange",this._windPageListener);
+   }
    if(!this._regions&&!this._loading)this._loadGeometry();
    else this._render();
    this._checkExistingLocationPermission();
  }
  disconnectedCallback(){
    this._stopWindAnimation();
+   this._windObserver?.disconnect();
+   this._windObserver=null;
+   if(this._windPageListener&&typeof document!=="undefined"&&document.removeEventListener){
+     document.removeEventListener("visibilitychange",this._windPageListener);
+     this._windPageListener=null;
+   }
    if(this._geolocationWatchId!==null && typeof navigator!=="undefined" && navigator.geolocation){
      navigator.geolocation.clearWatch(this._geolocationWatchId);
      this._geolocationWatchId=null;
@@ -398,33 +479,48 @@ class LT72WeatherMapCard extends HTMLElement {
    this._windRaf=null;
    this._windLastTime=0;
  }
+ _resumeWindAnimation(){
+   if(!this._windInViewport||this._windRaf!==null)return;
+   if(typeof document!=="undefined"&&document.hidden)return;
+   const mode=this._mode||"radar";
+   if(!["wind","all"].includes(mode)||this._config.animated_wind===false)return;
+   const attr=this._entity()?.attributes;
+   if(attr?.weather_available)this._startWindAnimation(attr.weather_samples||{});
+ }
  _startWindAnimation(samples){
+   if(this._windRaf!==null||!this._windInViewport||
+     (typeof document!=="undefined"&&document.hidden))return;
    const canvas=this.shadowRoot.querySelector?.(".wind-canvas");
    if(!canvas||typeof requestAnimationFrame!=="function")return;
    if(typeof matchMedia==="function" && matchMedia("(prefers-reduced-motion: reduce)").matches)return;
    const context=canvas.getContext?.("2d");
    if(!context)return;
+   const cores=typeof navigator!=="undefined"?navigator.hardwareConcurrency:8;
+   const memory=typeof navigator!=="undefined"?navigator.deviceMemory:8;
+   const preset=wmapPerformancePreset(this._config.performance_mode,cores,memory);
+   const windGrid=wmapBuildWindGrid(samples);
    const appearance=wmapWindStyle(this._config.map_theme,this._config.wind_visibility);
    const counts={low:75,medium:140,high:220};
-   const count=Math.round((counts[this._config.wind_particles]||140)*appearance.density);
+   const count=Math.max(24,Math.round((counts[this._config.wind_particles]||140)*appearance.density*preset.density));
    context.lineCap="round";
    context.shadowColor="rgba("+appearance.shadow+",0.52)";
-   context.shadowBlur=appearance.blur;
+   context.shadowBlur=preset.blur?appearance.blur:0;
    const seed=()=>({x:Math.random()*760,y:Math.random()*444,
      age:Math.random()*110,trail:[]});
    this._windParticles=Array.from({length:count},seed);
    const animate=(time)=>{
      // Keep a single animation loop per card; restart cleanly on HA updates.
-     if(this.isConnected===false){this._windRaf=null;return;}
-     if(time-this._windLastTime<32){
+     if(this.isConnected===false||!this._windInViewport||
+       (typeof document!=="undefined"&&document.hidden)){this._windRaf=null;return;}
+     if(this._windLastTime && time-this._windLastTime<1000/preset.fps){
        this._windRaf=requestAnimationFrame(animate);return;
      }
-     const dt=this._windLastTime ? Math.min(0.065,(time-this._windLastTime)/1000) : 0.033;
+     const dt=this._windLastTime?Math.min(0.10,(time-this._windLastTime)/1000):1/preset.fps;
      this._windLastTime=time;
      context.clearRect(0,0,760,444);
      for(let i=0;i<this._windParticles.length;i++){
        let p=this._windParticles[i];
-       const vector=wmapWindField(samples,p.x,p.y);
+       const vector=wmapSampleWindGrid(windGrid,p.x,p.y);
        const motion=wmapWindMotion(vector?.speed);
        if(!vector||motion.pixelsPerSecond===0){p.age+=4;continue;}
        p.x+=vector.vx/vector.speed*motion.pixelsPerSecond*dt;
@@ -501,7 +597,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const chosenFrame=frames[this._radarIndex]||null;
    const projection=wmapProjection();
    const theme=WMAP_THEME_COLORS[this._config.map_theme]||WMAP_THEME_COLORS.gray;
-   const currentBucket=Math.floor(Date.now()/600000);
+   const currentBucket=Math.floor(Date.now()/900000);
    if(this._satelliteBucket!==currentBucket){
      this._satelliteBucket=currentBucket;
      this._satelliteError=false;
@@ -886,6 +982,11 @@ class LT72WeatherMapEditor extends HTMLElement {
      '<p>IR sluoksnis neperjungia šviesaus ir tamsaus fono sutemus. „GeoColour“ gali turėti ryškią dienos / nakties ribą.</p>',
      '<h4>Rodyti / slėpti</h4><div class="flags">'+flags+'</div>',
      '<h4>Vėjo animacija</h4>',
+     '<label class="field"><span>Našumo režimas</span><select data-select="performance_mode">',
+     ...WMAP_PERFORMANCE_MODES.map(([id,label])=>
+       '<option value="'+id+'"'+((current.performance_mode||"auto")===id?' selected':'')+'>'+
+       WMAP_ESC(label)+'</option>'),
+     '</select></label>',
      '<label class="field"><span>Judančių vėjo dalelių kiekis</span><select data-select="wind_particles">',
      ...[["low","Mažai"],["medium","Vidutiniškai"],["high","Daug"]].map(([v,label])=>
        '<option value="'+v+'"'+((current.wind_particles||"medium")===v?' selected':'')+'>'+label+'</option>'),

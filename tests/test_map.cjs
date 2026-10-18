@@ -109,6 +109,8 @@ assert(!card.shadowRoot.innerHTML.includes('class="wind-canvas"'));
 assert(!card.shadowRoot.innerHTML.includes('class="device-location"'));
 editor._change("animated_wind",false);
 assert.equal(editor.event.detail.config.animated_wind,false);
+editor._change("animated_wind",true);
+assert.equal(Object.hasOwn(editor.event.detail.config,"animated_wind"),false);
 editor._change("show_location",false);
 assert.equal(editor.event.detail.config.show_location,false);
 editor._change("wind_particles","high");

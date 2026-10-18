@@ -269,7 +269,7 @@ class LT72WeatherMapCard extends HTMLElement {
    this._windParticles=Array.from({length:count},seed);
    const animate=(time)=>{
      // Keep a single animation loop per card; restart cleanly on HA updates.
-     if(!this.isConnected){this._windRaf=null;return;}
+     if(this.isConnected===false){this._windRaf=null;return;}
      if(time-this._windLastTime<32){
        this._windRaf=requestAnimationFrame(animate);return;
      }
@@ -556,7 +556,7 @@ class LT72WeatherMapEditor extends HTMLElement {
  _change(key,value){
    const next={...this._config};
    if(key==="compact"){if(value)next.compact=true;else delete next.compact;}
-   else if(key.startsWith("show_")){if(value)delete next[key];else next[key]=false;}
+   else if(key.startsWith("show_")||key==="animated_wind"){if(value)delete next[key];else next[key]=false;}
    else{if(value)next[key]=value;else delete next[key];}
    this._config=next;
    this.dispatchEvent(new CustomEvent("config-changed",{bubbles:true,composed:true,detail:{config:next}}));

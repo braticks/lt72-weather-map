@@ -1,0 +1,25 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate Python syntax
+        run: python -m compileall -q custom_components tests
+      - name: Test LT72 parser
+        run: python -m unittest discover -s tests -v
+      - name: Validate JSON
+        run: python -c "import pathlib,json; [json.loads(p.read_text()) for p in pathlib.Path('custom_components').rglob('*.json')]; json.loads(pathlib.Path('hacs.json').read_text())"
+      - name: Validate JavaScript syntax
+        run: node --check custom_components/lt72_weather_map/www/lt72-weather-map.js
+      - name: Test one-map overlays and UI
+        run: node tests/test_map.cjs

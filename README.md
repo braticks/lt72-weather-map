@@ -13,6 +13,10 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - **Sniegas** – Open-Meteo prognozuojamas snygis.
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
 
+**Versija:** [v0.1.1](https://github.com/braticks/lt72-weather-map/releases/tag/v0.1.1) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+
+**Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
+
 ## Įdiegimas
 
 1. HACS → Custom repositories → `https://github.com/braticks/lt72-weather-map` → **Integration**.

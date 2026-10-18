@@ -1,0 +1,17 @@
+{
+  "domain": "lt72_weather_map",
+  "name": "LT72 Weather Map",
+  "version": "0.1.0",
+  "documentation": "https://github.com/braticks/lt72-weather-map",
+  "issue_tracker": "https://github.com/braticks/lt72-weather-map/issues",
+  "codeowners": [
+    "@braticks"
+  ],
+  "config_flow": true,
+  "iot_class": "cloud_polling",
+  "dependencies": [
+    "http",
+    "lovelace"
+  ],
+  "requirements": []
+}

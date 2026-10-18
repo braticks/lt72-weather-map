@@ -1,0 +1,27 @@
+{
+  "title": "LT72 Weather Map",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pasirinkite apskritį",
+        "description": "LT72 oro pavojaus ir orų žemėlapis; papildomi duomenys iš Open-Meteo ir RainViewer.",
+        "data": {
+          "region": "Apskritis"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Integracija jau pridėta. Apskritį keiskite per Konfigūruoti."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pasirinkite apskritį",
+        "data": {
+          "region": "Apskritis"
+        }
+      }
+    }
+  }
+}

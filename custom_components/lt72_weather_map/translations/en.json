@@ -1,0 +1,27 @@
+{
+  "title": "LT72 Weather Map",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choose county",
+        "description": "Lithuanian LT72 air threats and weather on one map.",
+        "data": {
+          "region": "County"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Already configured. Select Configure to change county."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Choose county",
+        "data": {
+          "region": "County"
+        }
+      }
+    }
+  }
+}

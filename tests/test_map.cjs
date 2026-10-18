@@ -37,6 +37,8 @@ assert(tiles.every(t=>t.url.startsWith("https://tilecache.rainviewer.com/v2/rada
 assert(tiles.every(t=>Number.isFinite(t.x)&&Number.isFinite(t.y)));
 assert.equal(vm.runInContext('wmapRadarTiles({host:"https://evil.test"},frame).length',ctx),0);
 assert.equal(vm.runInContext('wmapRadarTiles(radar,{path:"/evil"}).length',ctx),0);
+ctx.frameHex={time:1792342800,path:"/v2/radar/15f54382b37b"};
+assert(vm.runInContext("wmapRadarTiles(radar,frameHex).length",ctx)>0);
 const editor=vm.runInContext("new LT72WeatherMapEditor()",ctx);
 editor.setConfig({type:"custom:lt72-weather-map"});
 assert(editor.shadowRoot.innerHTML.includes('data-setting="show_legend"'));

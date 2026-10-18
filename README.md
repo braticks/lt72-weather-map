@@ -36,3 +36,5 @@ Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML r
 Duomenys: [LT72](https://lt72.lt/), [RainViewer](https://www.rainviewer.com/) ir [Open-Meteo](https://open-meteo.com/); geografinės ribos: [govlt/powerbi-map-lt](https://github.com/govlt/powerbi-map-lt).
 
 RainViewer vieša nemokama API skirta asmeniniam / mokomajam naudojimui ir turi greičio apribojimus. Komerciniam naudojimui tikrinkite tiekėjo sąlygas. Žemėlapis **neįterpia Windy iframe**; visi sluoksniai sudedami ant to paties žemėlapio.
+
+*Pastaba: naujos RainViewer versijos radaro kadrų keliai turi 12 simbolių identifikatorius, todėl integracija priima ir naują, ir seną URL formatą.*

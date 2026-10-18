@@ -19,7 +19,7 @@ from .const import COUNTIES, DOMAIN, SOURCE_LT72, SOURCE_METEO, SOURCE_RADAR
 from .parser import parse_air_alerts
 
 _LOGGER = logging.getLogger(__name__)
-RADAR_PATH = re.compile(r"^/v2/radar/[0-9]{9,12}$")
+RADAR_PATH = re.compile(r"^/v2/radar/(?:[0-9]{9,12}|[0-9a-f]{12})$")
 
 
 def parse_meteo(data: object) -> dict:

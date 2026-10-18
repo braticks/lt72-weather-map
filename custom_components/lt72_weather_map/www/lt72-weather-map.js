@@ -121,7 +121,7 @@ function wmapState(alertsAvailable,alertRecord){
 function wmapRadarTiles(meta,frame,proj=wmapProjection()){
  const host=String(meta?.host||"");
  const path=String(frame?.path||"");
- if(host!=="https://tilecache.rainviewer.com"||!/^\/v2\/radar\/[0-9]{9,12}$/.test(path))return [];
+ if(host!=="https://tilecache.rainviewer.com"||!/^\/v2\/radar\/(?:[0-9]{9,12}|[0-9a-f]{12})$/.test(path))return [];
  const {xmin,xmax,ymin,ymax}=proj.tileBounds;
  const results=[];
  for(let x=xmin;x<=xmax;x++)for(let y=ymin;y<=ymax;y++){

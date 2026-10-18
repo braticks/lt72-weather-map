@@ -15,7 +15,7 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
 - **📍 Mano vieta** – rodo būtent dashboardą atidariusio telefono / planšetės / kompiuterio vietą. Vietos nustatymo prašoma tik paspaudus mygtuką; pakartotinai atidarius ir turint iš anksto suteiktą leidimą, ji gali būti įjungiama automatiškai. Vietos koordinatės naudojamos tik naršyklėje, nesiunčiamos į Home Assistant serverį. **Reikalinga HTTPS prieiga** arba kita naršyklės laikoma saugia aplinka; vietinis HTTP IP adresas paprastai neveiks.
 
-**Versija:** [v0.3.1](https://github.com/braticks/lt72-weather-map/releases/tag/v0.3.1) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.4.0](https://github.com/braticks/lt72-weather-map/releases/tag/v0.4.0) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -33,7 +33,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.3.1`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.4.0`.
 
 ## Saugumas ir informacija
 
@@ -68,3 +68,18 @@ show_alerts: true
 ```
 
 „Palydovas“ rodo **debesų struktūrą**, o ne tai, ar lyja/sninga. „Visi“ sluoksniuoja palydovo vaizdą po kritulių radaru ir LT72 apskritimis. Debesys pateikiami naudojant EUMETSAT `mtg_fd:rgb_geocolour` WMS sluoksnį (© EUMETSAT / NASA), o ne RainViewer IR produktą, kuris nutrauktas 2026 m. Palydovo vaizdai gaunami iš trečiosios šalies tiesiai per naršyklę, o ne per Home Assistant serverį.
+
+### ❄ Snaigės ir ⚡ perkūnijos žymekliai (v0.4.0)
+
+- **RainViewer (Universal Blue / paletė 2, smoothed/snow 1_1)** rodo radaru užfiksuotus kritulius. Lietus paprastai mėlynų atspalvių; stiprūs krituliai kartais ir kitų spalvų.
+- **❄ Snaigės** virš apskrities centre esančio prognozės taško atsiranda tik tada, kai Open-Meteo modelis pateikia teigiamą `snowfall` arba sniego `weather_code`. Tai **nesudaro tikro radarinio snaigių lauko** ir neleidžia nustatyti konkrečios sniego ribos.
+- **⚡ Žymeklis** įjungiamas, kai modelis praneša `weather_code: 95, 96, 97, 99` (perkūnija). **Tai nėra tikri užfiksuoti žaibo smūgiai ir neseka jų koordinačių.**
+- Per kortos **vizualinį redaktorių** galima atskirai slėpti / rodyti snaiges ir perkūnijos žymeklius. Abu rodomi **Radaras**, **Sniegas** ir **Visi** režimuose, jei yra orų prognozės duomenys.
+
+```yaml
+type: custom:lt72-weather-map
+layer: radar
+show_snowflakes: true
+show_thunderstorms: true
+show_precip_legend: true
+```

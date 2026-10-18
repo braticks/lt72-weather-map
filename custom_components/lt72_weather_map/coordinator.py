@@ -35,7 +35,14 @@ def parse_meteo(data: object) -> dict:
             raise ValueError("Open-Meteo current data is missing")
         if not all(isinstance(current.get(key), (int, float)) for key in required):
             raise ValueError("Open-Meteo current values are incomplete")
+        weather_code = current.get("weather_code")
+        # WMO code is optional for graceful upgrades / inconsistent providers.
+        weather_code = int(weather_code) if (
+            isinstance(weather_code, (int, float))
+            and not isinstance(weather_code, bool)
+        ) else None
         parsed[county] = {
+            "weather_code": weather_code,
             "wind_kmh": round(float(current["wind_speed_10m"]), 1),
             "wind_from_deg": round(float(current["wind_direction_10m"]), 0),
             "gust_kmh": round(float(current["wind_gusts_10m"]), 1),
@@ -113,7 +120,7 @@ class LT72WeatherCoordinator(DataUpdateCoordinator[dict]):
                     "latitude": ",".join(str(x[1]) for x in rows),
                     "longitude": ",".join(str(x[2]) for x in rows),
                     "current": "wind_speed_10m,wind_direction_10m,"
-                               "wind_gusts_10m,snowfall,precipitation",
+                               "wind_gusts_10m,snowfall,precipitation,weather_code",
                     "forecast_days": 1,
                     "wind_speed_unit": "kmh",
                     "timezone": "Europe/Vilnius",

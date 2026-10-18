@@ -39,6 +39,8 @@ const WMAP_FLAGS=[
  ["show_timeline","Rodyti radaro laiko valdymą"],
  ["show_disclaimer","Rodyti perspėjimo paaiškinimą"],
  ["show_precip_legend","Rodyti radaro kritulių spalvų paaiškinimą"],
+ ["show_snowflakes","Rodyti snaiges prognozuojant snygį"],
+ ["show_thunderstorms","Rodyti prognozuojamą perkūniją ⚡"],
  ["show_toolbar","Rodyti sluoksnių perjungimą"],
  ["show_location","Rodyti „Mano vieta“ žymeklį"],
  ["animated_wind","Animuoti vėjo judėjimą"]
@@ -166,6 +168,32 @@ function wmapSatelliteUrl(proj=wmapProjection(),now=Date.now()) {
    _t:String(Math.floor(now/600000)) // Refresh the WMS image roughly every 10 min.
  });
  return "https://view.eumetsat.int/geoserver/wms?"+params.toString();
+}
+// Forecast markers: based on Open-Meteo county sample points, not observed
+// lightning strike positions and not radar-pixel precipitation types.
+function wmapIsSnowForecast(forecast) {
+ if(!forecast)return false;
+ const cm=Number(forecast.snow_cm);
+ const code=Number(forecast.weather_code);
+ return (Number.isFinite(cm)&&cm>0) ||
+   [71,73,75,77,85,86].includes(code);
+}
+function wmapIsThunderForecast(forecast) {
+ if(!forecast || forecast.weather_code==null)return false;
+ return [95,96,97,99].includes(Number(forecast.weather_code));
+}
+function wmapSnowCluster(shape) {
+ const offsets=[
+   [-34,-28],[-15,-34],[8,-30],[30,-24],
+   [-40,-6],[-21,-6],[0,-9],[22,-3],[41,0],
+   [-35,19],[-13,16],[10,21],[31,23]
+ ];
+ return '<g class="snow-cluster" aria-label="Prognozuojamas sniegas: '+WMAP_ESC(shape.name)+' apskritis">'+
+   offsets.map(([dx,dy],i)=>
+     '<text class="forecast-snowflake" x="'+(shape.x+dx).toFixed(1)+
+     '" y="'+(shape.y+dy).toFixed(1)+'" font-size="'+(i%3===0?17:13)+
+     '" text-anchor="middle">❄</text>'
+   ).join("")+'</g>';
 }
 function wmapRadarTiles(meta,frame,proj=wmapProjection()){
  const host=String(meta?.host||"");
@@ -362,7 +390,8 @@ class LT72WeatherMapCard extends HTMLElement {
    const showSatellite=mode==="satellite"||mode==="all";
    const showRadar=(mode==="radar"||mode==="all")&&radarReady;
    const showWind=(mode==="wind"||mode==="all")&&weatherReady;
-   const showSnow=(mode==="snow"||mode==="all")&&weatherReady;
+   const showSnow=(mode==="snow"||mode==="radar"||mode==="all")&&weatherReady;
+   const showThunder=(mode==="snow"||mode==="radar"||mode==="all")&&weatherReady;
    const chosenFrame=frames[this._radarIndex]||null;
    const projection=wmapProjection();
    const currentBucket=Math.floor(Date.now()/600000);
@@ -417,18 +446,29 @@ class LT72WeatherMapCard extends HTMLElement {
            WMAP_ESC(w.wind_kmh+" km/h")+'</text>';
        }
      }
-     if(showSnow&&Number(w.snow_cm)>0){
-       const yy=showWind?s.y-26:s.y;
-       shapes+='<text x="'+(s.x+23).toFixed(1)+'" y="'+yy.toFixed(1)+
-         '" class="snow-label" text-anchor="middle">❄</text>';
-       if(this._show("show_weather_labels")){
-         shapes+='<text x="'+(s.x+23).toFixed(1)+'" y="'+(yy+14).toFixed(1)+
-           '" class="weather-label" text-anchor="middle">'+
-           WMAP_ESC(w.snow_cm+" cm")+'</text>';
-       }
+     if(mode==="snow" && this._show("show_weather_labels") && wmapIsSnowForecast(w)){
+       shapes+='<text x="'+s.x.toFixed(1)+'" y="'+(s.y+45).toFixed(1)+
+         '" class="weather-label" text-anchor="middle">'+
+         WMAP_ESC(w.snow_cm+" cm prognozė")+'</text>';
      }
      return shapes;
    }).join(""):"";
+   const forecastSymbols=this._regions&&weatherReady ? this._regions.map(s=>{
+     const w=weather[s.key];
+     if(!w)return "";
+     const snow=showSnow&&this._show("show_snowflakes")&&wmapIsSnowForecast(w);
+     const thunder=showThunder&&this._show("show_thunderstorms")&&wmapIsThunderForecast(w);
+     if(!snow&&!thunder)return "";
+     const clipId="wmap-clip-"+s.key;
+     const defs='<defs><clipPath id="'+clipId+'"><path d="'+s.d+'"></path></clipPath></defs>';
+     const flakes=snow?'<g clip-path="url(#'+clipId+')">'+wmapSnowCluster(s)+'</g>':"";
+     const bolt=thunder?'<g class="thunder-forecast" transform="translate('+
+       s.x.toFixed(1)+','+(s.y-8).toFixed(1)+')">'+
+       '<circle r="15" fill="rgba(26,32,44,.68)" stroke="#facc15" stroke-width="1.5"></circle>'+
+       '<path d="M2-11 -7 2 H-1 L-5 12 9-3 H3 L7-11 Z" fill="#facc15" stroke="#fff1a8" stroke-width=".7"></path>'+
+       '<title>⚡ Prognozuojama perkūnija – ne užfiksuotas žaibo smūgis</title></g>':"";
+     return defs+flakes+bolt;
+   }).join("") : "";
    const browserPoint=this._config.show_location!==false?
      wmapLocationMarker(this._devicePosition,projection):null;
    const locationOnMap=this._devicePosition&&!browserPoint;
@@ -454,6 +494,8 @@ class LT72WeatherMapCard extends HTMLElement {
        '<span>Gūsiai '+WMAP_ESC(forecast.gust_kmh)+' km/h</span>'+
        '<span>❄ '+WMAP_ESC(forecast.snow_cm)+' cm</span>'+
        '<span>🌧 '+WMAP_ESC(forecast.precip_mm)+' mm</span>'+
+       (wmapIsSnowForecast(forecast)?'<span>❄ Prognozuojamas snygis</span>':"")+
+       (wmapIsThunderForecast(forecast)?'<span>⚡ Prognozuojama perkūnija (ne žaibo smūgiai)</span>':"")+
      '</div>':"<div class=\"note\">Orų prognozės neprieinamos.</div>";
    const msg=!activeAlerts?"LT72 duomenys neprieinami":
      !alert?"LT72 įrašo nėra – tai ne oficialus atšaukimas":
@@ -468,7 +510,7 @@ class LT72WeatherMapCard extends HTMLElement {
      '<div class="precip-guide"><strong>🌧️ Radaro krituliai:</strong>'+
        '<span class="rain-gradient"></span><span>Silpnesni → stipresni</span>'+
        '<span class="snow-chip">❄️</span><span>Žydra / balzgana – galimas sniegas</span>'+
-       '<small>RainViewer spalvos (2 / Universal Blue), atskirai spalvinamas sniegas. Sniego atpažinimas apytikslis.</small>'+
+       '<small>RainViewer paletė „Universal Blue“ (2). Lietus daugiausia mėlynas, stiprūs krituliai gali būti kitų atspalvių. ❄ žymekliai – Open-Meteo sniego prognozė pagal apskritis; ne radaro snaigių koordinatės. ⚡ – prognozuojama perkūnija, ne užfiksuoti smūgiai.</small>'+
      '</div>' : "";
    const satelliteGuide=showSatellite?
      '<div class="sat-guide">☁️ EUMETSAT Meteosat palydovas: debesys, dieną natūralios spalvos, naktį IR. '+ 
@@ -505,7 +547,7 @@ class LT72WeatherMapCard extends HTMLElement {
      '</div>';
    const explanatory=this._show("show_disclaimer")?
      '<div class="fineprint">Balta be pranešimo ≠ oficialus atšaukimas. '+
-     'Pilka = nepasiekiama. Radaras rodo stebėtus kritulius, o palydovas – debesų dangą; vėjas ir apskričių sniegas – modelio prognozė. '+
+     'Pilka = nepasiekiama. Radaras rodo stebėtus kritulius, o palydovas – debesų dangą; vėjas, snaigės ir ⚡ perkūnijos žymekliai – modelio prognozė, NE tikri žaibo smūgiai. '+
      'Pavojaus metu vadovaukitės oficialiais LT-Alert pranešimais.</div>':"";
    const mapMissing=(mode==="radar"&&!radarReady)||
      ((mode==="wind"||mode==="snow")&&!weatherReady);
@@ -527,6 +569,8 @@ class LT72WeatherMapCard extends HTMLElement {
      '.county-label{font:bold 13px Roboto,Arial,sans-serif;fill:#18253b;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;pointer-events:none}',
      '.weather-label{font:bold 12px Roboto,Arial,sans-serif;fill:#134e86;paint-order:stroke;stroke:#fff;stroke-width:3.5px;pointer-events:none}',
      '.snow-label{font:29px Arial,sans-serif;fill:#0ea5e9;paint-order:stroke;stroke:#fff;stroke-width:3px;pointer-events:none}',
+     '.forecast-snowflake{font-family:Arial,sans-serif;fill:#e2f7ff;stroke:#2b86b8;stroke-width:.6px;paint-order:stroke;pointer-events:none;filter:drop-shadow(0 1px 1px #0f416688)}',
+     '.snow-cluster,.thunder-forecast{pointer-events:none}',
      '[data-region]{cursor:pointer;outline:none}[data-region]:focus-visible path,[data-region]:hover path{stroke:#2563eb;stroke-width:3}',
      '.missing{padding:30px 10px;color:var(--secondary-text-color);text-align:center}',
      '.geo-note{font-size:11px;color:var(--secondary-text-color);margin-top:5px;line-height:1.4}',
@@ -557,7 +601,7 @@ class LT72WeatherMapCard extends HTMLElement {
      !this._regions?'<div class="missing">Įkeliamas Lietuvos žemėlapis...</div>':
        '<svg viewBox="0 0 760 444" aria-label="LT72 pavojaus ir orų žemėlapis" role="img">'+
          '<rect x="0" y="0" width="760" height="444" fill="var(--secondary-background-color,#e7eff4)"></rect>'+
-         satelliteImage+images+regionsHtml+weatherHtml+deviceMarker+'</svg>'+
+         satelliteImage+images+regionsHtml+weatherHtml+forecastSymbols+deviceMarker+'</svg>'+
          (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':""),
      locationButton,
      (mapMissing?'<div class="overlay-alert">⚠ '+WMAP_ESC(mode==="radar"?

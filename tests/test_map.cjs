@@ -30,6 +30,14 @@ assert.equal(vm.runInContext("wmapState(true,null)",ctx),"not_reported");
 assert.equal(vm.runInContext("wmapState(false,null)",ctx),"unavailable");
 assert.equal(vm.runInContext('wmapState(true,{kodas:"red"})',ctx),"red");
 assert.equal(vm.runInContext('wmapState(true,{kodas:"white"})',ctx),"white");
+assert.equal(vm.runInContext('wmapIsSnowForecast({snow_cm:0.4,weather_code:0})',ctx),true);
+assert.equal(vm.runInContext('wmapIsSnowForecast({snow_cm:0,weather_code:85})',ctx),true);
+assert.equal(vm.runInContext('wmapIsSnowForecast({snow_cm:0,weather_code:0})',ctx),false);
+assert.equal(vm.runInContext('wmapIsThunderForecast({weather_code:95})',ctx),true);
+assert.equal(vm.runInContext('wmapIsThunderForecast({weather_code:97})',ctx),true);
+assert.equal(vm.runInContext('wmapIsThunderForecast({weather_code:99})',ctx),true);
+assert.equal(vm.runInContext('wmapIsThunderForecast({weather_code:61})',ctx),false);
+assert.equal(vm.runInContext('wmapIsThunderForecast({weather_code:null})',ctx),false);
 const satelliteUrl=vm.runInContext("wmapSatelliteUrl(wmapProjection(),1792000000000)",ctx);
 const sat=new URL(satelliteUrl);
 assert.equal(sat.hostname,"view.eumetsat.int");
@@ -81,7 +89,7 @@ const attributes={
   saltinis:"LT72 Weather Map",apskritis:"Kauno apskritis",
   alerts_available:true, weather_available:true,radar_available:true,
   apskritys:{kauno:{kodas:"red",paskelbta:"2026-10-18 08:00"}},
-  weather_samples:{kauno:{wind_kmh:20,wind_from_deg:90,gust_kmh:35,snow_cm:0.3,precip_mm:1}},
+  weather_samples:{kauno:{wind_kmh:20,wind_from_deg:90,gust_kmh:35,snow_cm:0.3,precip_mm:1,weather_code:95}},
   radar:valid
 };
 card.setConfig({type:"custom:lt72-weather-map",region:"kauno",layer:"radar"});
@@ -142,3 +150,25 @@ assert.equal(editor.event.detail.config.layer,"satellite");
 editor._change("show_precip_legend",false);
 assert.equal(editor.event.detail.config.show_precip_legend,false);
 console.log("EUMETSAT WMS bounds, overlay, and radar legend toggles verified.");
+
+card.setConfig({type:"custom:lt72-weather-map",layer:"radar"});
+assert(card.shadowRoot.innerHTML.includes('class="snow-cluster"'),"Snow cluster visible on radar");
+assert(card.shadowRoot.innerHTML.includes('class="thunder-forecast"'),"Forecast thunder on radar");
+assert(card.shadowRoot.innerHTML.includes("Prognozuojama perkūnija"));
+assert(card.shadowRoot.innerHTML.includes("Ne tikri žaibo smūgiai") ||
+       card.shadowRoot.innerHTML.includes("NE tikri žaibo smūgiai") ||
+       card.shadowRoot.innerHTML.includes("ne užfiksuoti smūgiai"));
+card.setConfig({type:"custom:lt72-weather-map",layer:"radar",show_snowflakes:false});
+assert(!card.shadowRoot.innerHTML.includes('class="snow-cluster"'));
+assert(card.shadowRoot.innerHTML.includes('class="thunder-forecast"'));
+card.setConfig({type:"custom:lt72-weather-map",layer:"radar",show_thunderstorms:false});
+assert(!card.shadowRoot.innerHTML.includes('class="thunder-forecast"'));
+assert(card.shadowRoot.innerHTML.includes('class="snow-cluster"'));
+card.setConfig({type:"custom:lt72-weather-map",layer:"wind"});
+assert(!card.shadowRoot.innerHTML.includes('class="snow-cluster"'));
+assert(!card.shadowRoot.innerHTML.includes('class="thunder-forecast"'));
+editor._change("show_snowflakes",false);
+assert.equal(editor.event.detail.config.show_snowflakes,false);
+editor._change("show_thunderstorms",false);
+assert.equal(editor.event.detail.config.show_thunderstorms,false);
+console.log("Rain, forecast snowflakes, storm model and UI toggles passed.");

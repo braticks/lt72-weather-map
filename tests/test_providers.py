@@ -61,6 +61,7 @@ class Sources(unittest.TestCase):
                 "wind_gusts_10m": 40,
                 "snowfall": 0.1,
                 "precipitation": 1.4,
+                "weather_code": 95,
                 "time": "2026-10-18T19:00",
             }} for _ in range(10)
         ]
@@ -68,6 +69,16 @@ class Sources(unittest.TestCase):
         self.assertEqual(len(parsed), 10)
         self.assertEqual(parsed["0"]["wind_kmh"], 23.5)
         self.assertEqual(parsed["0"]["snow_cm"], 0.1)
+        self.assertEqual(parsed["0"]["weather_code"], 95)
+
+    def test_weather_code_can_be_missing_without_faking_a_storm(self):
+        payload = [{"current": {
+            "wind_speed_10m": 5, "wind_direction_10m": 180,
+            "wind_gusts_10m": 10, "snowfall": 0,
+            "precipitation": 0,
+        }} for _ in range(10)]
+        parsed = parse_meteo(payload)
+        self.assertIsNone(parsed["0"]["weather_code"])
 
     def test_missing_meteo_not_zero(self):
         with self.assertRaises(ValueError):

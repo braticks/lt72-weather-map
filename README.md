@@ -11,11 +11,11 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - **Radaras** – RainViewer stebėti krituliai (iki 2 val. istorija, ne prognozė). Radaro vaizdas naudoja **Universal Blue (2)** spalvų paletę ir parametrą `1_1`, leidžiantį atskirai spalvinti tikėtiną sniegą. Kortelėje yra atskiras spalvų paaiškinimas, kurį galima išjungti.
 - **Vėjas** – animuotos vėjo dalelės ir Open-Meteo prognozuojamas greitis, kryptis bei gūsiai. Dalelės juda pagal apytikslę 10 apskričių vėjo duomenų interpoliaciją (ne „Windy“ detalumo modelis).
 - **Sniegas** – Open-Meteo prognozuojamas snygis. Sniego prognozė pagal apskritis nėra tas pats, kas radaro sniego spalvinimas.
-- **Palydovas** – [EUMETSAT EUMETView](https://view.eumetsat.int/) „Meteosat GeoColour RGB“ WMS vaizdas tame pačiame geografiniame žemėlapyje (dieną debesų spalvos, naktį infraraudonųjų spindulių informacija), su atskiru debesų sluoksnio mygtuku. **Palydovo vaizdo realų atvaizdavimą reikia patikrinti naudojamoje HA naršyklėje:** viešasis WMS gali vėluoti ar riboti užklausas; nutrūkus ryšiui korta parodo įspėjimą.
+- **Palydovas** – [EUMETSAT EUMETView](https://view.eumetsat.int/) WMS vaizdas tame pačiame geografiniame žemėlapyje. Nuo v0.5.1 numatytasis variantas – **IR 10,5 µm**, vienodai naudojamas dieną ir naktį; neprivalomas GeoColour dienos ir nakties kompozitas prieinamas per UI. Debesų vaizdo ryškumas keičiamas UI. **Palydovo vaizdo realų atvaizdavimą reikia patikrinti naudojamoje HA naršyklėje:** viešasis WMS gali vėluoti ar riboti užklausas; nutrūkus ryšiui korta parodo įspėjimą.
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
 - **📍 Mano vieta** – rodo būtent dashboardą atidariusio telefono / planšetės / kompiuterio vietą. Vietos nustatymo prašoma tik paspaudus mygtuką; pakartotinai atidarius ir turint iš anksto suteiktą leidimą, ji gali būti įjungiama automatiškai. Vietos koordinatės naudojamos tik naršyklėje, nesiunčiamos į Home Assistant serverį. **Reikalinga HTTPS prieiga** arba kita naršyklės laikoma saugia aplinka; vietinis HTTP IP adresas paprastai neveiks.
 
-**Versija:** [v0.5.0](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.0) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.1](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.1) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -33,7 +33,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.0`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.1`.
 
 ## Saugumas ir informacija
 
@@ -104,4 +104,18 @@ map_theme: gray  # gray | light | dark | blue
 show_neighbor_borders: true
 show_neighbor_labels: true
 animated_wind: true
+```
+
+### Palydovo vaizdo sutvarkymas (v0.5.1)
+
+Anksčiau numatytasis **GeoColour** sluoksnis jungė saulės apšviestas natūralias spalvas ir tamsų NASA nakties foną. Esant sutemoms žemėlapyje matėsi staigūs šviesaus ir tamsaus fono plotai, todėl ribos bei radaras buvo sunkiai įskaitomi. Dabar numatytasis **EUMETSAT Meteosat MTG IR10.5** (`mtg_fd:ir105_hrfi`) yra tas pats infraraudonųjų spindulių produktas ir dieną, ir naktį; jis rodomas su 38% permatomumu bei `screen` maišymo režimu virš žemėlapio fono. GeoColour liko **pasirinktinis**, jo dienos/nakties riba gali būti ryški.
+
+Kortos vizualiniame redaktoriuje rinkitės **Palydoviniai debesys → Palydovo vaizdo tipas**, taip pat galite mažinti sluoksnio ryškumą iki 25%. **Pasirinktos apskrities mėlynas kontūras sušvelnintas**, kad neužgožtų kitų sienų.
+
+```yaml
+type: custom:lt72-weather-map
+layer: satellite
+satellite_style: ir          # ir | geocolour
+satellite_opacity: subtle   # subtle | normal | strong
+map_theme: gray
 ```

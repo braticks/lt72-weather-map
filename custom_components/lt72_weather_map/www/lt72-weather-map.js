@@ -40,6 +40,17 @@ const WMAP_THEME_COLORS={
  dark:{sea:"#1d2a35",land:"#354451",outline:"#697984",names:"#acbdc9",county:"#8ca2b0",label:"#edf6fc"},
  blue:{sea:"#a9d0e4",land:"#dbe9e6",outline:"#83a3b4",names:"#527c8d",county:"#7f9ca7",label:"#274c64"}
 };
+// GeoColour switches between daylight and night images; for a consistent
+// readable cloud overlay use the 10.5 um infrared channel by default.
+const WMAP_SATELLITE_STYLES=[
+ ["ir","☁️ Infraraudonieji debesys (rekomenduojama)"],
+ ["geocolour","🛰️ GeoColour – diena / naktis"]
+];
+const WMAP_SATELLITE_OPACITIES=[
+ ["subtle","Švelnus (25 %)"],
+ ["normal","Vidutinis (38 %)"],
+ ["strong","Ryškus (55 %)"]
+];
 const WMAP_COUNTRY_LABELS=[
  ["Latvija",24.6,56.26],["Baltarusija",27.4,54.35],
  ["Lenkija",22.0,54.07],["Kaliningrado sritis",21.64,54.34]
@@ -200,17 +211,21 @@ function wmapLocationMarker(coords, projection=wmapProjection()) {
  if(x<0||y<0||x>760||y>444)return null;
  return {x,y};
 }
-// EUMETView public WMS GeoColour combines visible satellite imagery by day
-// and infrared cloud depiction at night. Attribution: EUMETSAT & NASA.
-function wmapSatelliteUrl(proj=wmapProjection(),now=Date.now()) {
+// EUMETView infrared band is day/night consistent. GeoColour alternates
+// daytime true-colour and a nighttime IR + NASA basemap; keep it optional.
+function wmapSatelliteUrl(proj=wmapProjection(),now=Date.now(),style="ir") {
+ const layer=style==="geocolour"?"mtg_fd:rgb_geocolour":"mtg_fd:ir105_hrfi";
  const params=new URLSearchParams({
    SERVICE:"WMS",VERSION:"1.3.0",REQUEST:"GetMap",
-   LAYERS:"mtg_fd:rgb_geocolour",STYLES:"",
+   LAYERS:layer,STYLES:"",
    CRS:"EPSG:3857",BBOX:proj.bbox3857.map(v=>v.toFixed(1)).join(","),
    WIDTH:"760",HEIGHT:"444",FORMAT:"image/png",TRANSPARENT:"true",
    _t:String(Math.floor(now/600000)) // Refresh the WMS image roughly every 10 min.
  });
  return "https://view.eumetsat.int/geoserver/wms?"+params.toString();
+}
+function wmapSatelliteOpacity(level) {
+ return ({subtle:0.25,normal:0.38,strong:0.55})[level]??0.38;
 }
 // Forecast markers: based on Open-Meteo county sample points, not observed
 // lightning strike positions and not radar-pixel precipitation types.
@@ -454,9 +469,12 @@ class LT72WeatherMapCard extends HTMLElement {
      this._satelliteBucket=currentBucket;
      this._satelliteError=false;
    }
+   const satelliteStyle=this._config.satellite_style==="geocolour"?"geocolour":"ir";
+   const satelliteOpacity=wmapSatelliteOpacity(this._config.satellite_opacity);
    const satelliteImage=showSatellite&&!this._satelliteError?
-     '<image class="satellite-layer" href="'+WMAP_ESC(wmapSatelliteUrl(projection))+
-     '" x="0" y="0" width="760" height="444" preserveAspectRatio="none"></image>' : "";
+     '<image class="satellite-layer" href="'+WMAP_ESC(wmapSatelliteUrl(projection,Date.now(),satelliteStyle))+
+     '" x="0" y="0" width="760" height="444" preserveAspectRatio="none" opacity="'+satelliteOpacity+
+     '" style="mix-blend-mode:'+(satelliteStyle==="ir"?"screen":"normal")+'"></image>' : "";
    let images="";
    if(showRadar&&chosenFrame){
      images=wmapRadarTiles(radar,chosenFrame,projection).map(t=>
@@ -483,7 +501,7 @@ class LT72WeatherMapCard extends HTMLElement {
      const alertShown=this._show("show_alerts");
      const opacity=alertShown?(isActive?0.68:code==="unavailable"?0.16:0.05):0;
      const select=s.key===region[0];
-     const outline=select?"var(--primary-color,#2677d6)":"var(--wmap-county)";
+     const outline="var(--wmap-county)";
      const bgFill=alertShown?color:"#f4f6fa";
      const text=this._show("show_region_labels")?
        '<text x="'+s.x.toFixed(1)+'" y="'+(s.y-13).toFixed(1)+
@@ -491,8 +509,8 @@ class LT72WeatherMapCard extends HTMLElement {
      return '<g role="button" tabindex="0" data-region="'+s.key+
        '" aria-label="'+WMAP_ESC(s.name+" apskritis: "+WMAP_LEVELS[code][0])+'">'+
        '<path d="'+s.d+'" fill="'+bgFill+'" fill-opacity="'+opacity+
-       '" stroke="'+outline+'" stroke-opacity="'+(select?0.95:0.62)+
-       '" stroke-width="'+(select?2.65:0.95)+
+       '" stroke="'+outline+'" stroke-opacity="'+(select?0.85:0.53)+
+       '" stroke-width="'+(select?1.65:0.85)+
        '" stroke-dasharray="'+(code==="not_reported"&&!select?"4 3":"none")+
        '" stroke-linejoin="round"></path>'+text+'</g>';
    }).join(""):"";
@@ -581,9 +599,11 @@ class LT72WeatherMapCard extends HTMLElement {
        '<small>RainViewer paletė „Universal Blue“ (2). Lietus daugiausia mėlynas, stiprūs krituliai gali būti kitų atspalvių. ❄ žymekliai – Open-Meteo sniego prognozė pagal apskritis; ne radaro snaigių koordinatės. ⚡ – prognozuojama perkūnija, ne užfiksuoti smūgiai.</small>'+
      '</div>' : "";
    const satelliteGuide=showSatellite?
-     '<div class="sat-guide">☁️ EUMETSAT Meteosat palydovas: debesys, dieną natūralios spalvos, naktį IR. '+ 
-       'Tai ne kritulių radaras.'+
-       (this._satelliteError?' ⚠ Palydovinis vaizdas nepasiekiamas.':'')+'</div>' : "";
+     '<div class="sat-guide">☁️ '+(satelliteStyle==="ir"?
+       'Palydoviniai debesys – IR 10,5 µm, vienodas sluoksnis dieną ir naktį.':
+       'GeoColour: dienos natūralios spalvos / nakties IR kompozitas. Sutemų riba gali būti ryški.')+
+       ' Tai nėra lietaus ar sniego radaras.'+
+       (this._satelliteError?' ⚠ EUMETSAT vaizdas nepasiekiamas.':'')+'</div>' : "";
    const legend=this._show("show_legend")?
      '<div class="legend">'+Object.entries(WMAP_LEVELS).filter(e=>e[0]!=="not_reported")
        .map(([,level])=>'<span><i style="background:'+level[1]+'"></i>'+
@@ -612,7 +632,8 @@ class LT72WeatherMapCard extends HTMLElement {
      ' · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>'+
      ((mode==="radar"||mode==="all")?
        ' · Weather data by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>':'')+
-     (showSatellite?' · Imagery © <a href="https://www.eumetsat.int/" target="_blank" rel="noopener noreferrer">EUMETSAT</a> / NASA':'')+
+     (showSatellite?' · Palydovas © <a href="https://www.eumetsat.int/" target="_blank" rel="noopener noreferrer">EUMETSAT</a>'+
+       (satelliteStyle==="geocolour"?'/NASA':""):'')+
      '</div>';
    const explanatory=this._show("show_disclaimer")?
      '<div class="fineprint">Balta be pranešimo ≠ oficialus atšaukimas. '+
@@ -629,7 +650,8 @@ class LT72WeatherMapCard extends HTMLElement {
      '.toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}',
      '.mode{border:1px solid var(--divider-color,#9ca3af);color:var(--primary-text-color);background:var(--secondary-background-color,#f3f4f6);font:inherit;font-size:12px;padding:7px 9px;border-radius:8px;cursor:pointer}',
      '.mode.active{border-color:var(--primary-color,#2196f3);box-shadow:inset 0 0 0 1px var(--primary-color,#2196f3);font-weight:700}',
-     '.map{position:relative;background:var(--wmap-sea,#7b858c);border-radius:10px;overflow:hidden}',
+     '.map{position:relative;background:var(--wmap-sea,#7b858c);border-radius:10px;overflow:hidden;isolation:isolate}',
+     '.satellite-layer{pointer-events:none}',
      '.neighbor{fill:none;stroke:var(--wmap-border);stroke-width:1.35;stroke-opacity:.48;pointer-events:none}',
      '.neighbor-label{font:500 13px Roboto,Arial,sans-serif;fill:var(--wmap-names);stroke:var(--wmap-land);stroke-width:2px;paint-order:stroke;pointer-events:none}',
      '.neighbor-land{pointer-events:none}', 
@@ -773,6 +795,18 @@ class LT72WeatherMapEditor extends HTMLElement {
        '<option value="'+id+'"'+((current.map_theme||"gray")===id?' selected':'')+'>'+
        WMAP_ESC(name)+'</option>'),
      '</select></label>',
+     '<h4>Palydoviniai debesys</h4>',
+     '<label class="field"><span>Palydovo vaizdo tipas</span><select data-select="satellite_style">',
+     ...WMAP_SATELLITE_STYLES.map(([id,name])=>
+       '<option value="'+id+'"'+((current.satellite_style||"ir")===id?' selected':'')+'>'+
+       WMAP_ESC(name)+'</option>'),
+     '</select></label>',
+     '<label class="field"><span>Debesų sluoksnio ryškumas</span><select data-select="satellite_opacity">',
+     ...WMAP_SATELLITE_OPACITIES.map(([id,name])=>
+       '<option value="'+id+'"'+((current.satellite_opacity||"normal")===id?' selected':'')+'>'+
+       WMAP_ESC(name)+'</option>'),
+     '</select></label>',
+     '<p>IR sluoksnis neperjungia šviesaus ir tamsaus fono sutemus. „GeoColour“ gali turėti ryškią dienos / nakties ribą.</p>',
      '<h4>Rodyti / slėpti</h4><div class="flags">'+flags+'</div>',
      '<h4>Vėjo animacija</h4>',
      '<label class="field"><span>Judančių vėjo dalelių kiekis</span><select data-select="wind_particles">',

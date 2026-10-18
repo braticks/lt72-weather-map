@@ -15,7 +15,8 @@ const ctx={
   CustomEvent:class{constructor(type,init){this.type=type;Object.assign(this,init);}},
   customElements:{get:(key)=>registered[key],define:(key,val)=>registered[key]=val},
   document:{createElement:(key)=>({element:key})},
-  window:{}
+  window:{},
+  URLSearchParams
 };
 vm.createContext(ctx);vm.runInContext(source,ctx);
 ctx.topo=topo;

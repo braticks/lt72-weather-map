@@ -142,7 +142,7 @@ class FifteenMinuteWindTests(unittest.TestCase):
         speed, direction, stamped = wind_15m_model_average(self.sample())
         self.assertEqual(speed, 10)
         self.assertLess(min(direction,360-direction), 13)
-        self.assertEqual(stamped, "2026-10-18T21:30")
+        self.assertEqual(stamped, "2026-10-18T21:30:00")
 
     def test_current_fallback_without_false_15m_label(self):
         item = self.sample()

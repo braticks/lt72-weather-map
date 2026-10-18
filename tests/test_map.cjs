@@ -243,7 +243,8 @@ console.log("Consistent IR satellite, daylight/night GeoColour option, opacity a
 card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:false,show_sources:false});
 const cleanBottom=card.shadowRoot.innerHTML;
 assert(!cleanBottom.includes('<div class="sat-guide">'),"Satellite info hidden");
-assert(!cleanBottom.includes('<div class="credits">Made with'),"Sources line must be hidden when collapsed");
+assert(cleanBottom.includes('<details class="source-details">'),"Sources collapse into a disclosure");
+assert(!cleanBottom.includes('<details class="source-details" open'),"Sources must default closed");
 assert(cleanBottom.includes('<details class="source-details">'),"Sources remain accessible through disclosure");
 assert(cleanBottom.includes("ⓘ Šaltiniai"));
 card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:true,show_sources:true});

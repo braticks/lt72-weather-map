@@ -9,11 +9,12 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - Tikros visų 10 Lietuvos apskričių ribos, spustelėjama apskritis.
 - Oro pavojus: raudona / geltona / geltona po raudonos / balta; be įrašo kortoje balta su punktyrine riba (ne oficialus atšaukimas).
 - **Radaras** – RainViewer stebėti krituliai (iki 2 val. istorija, ne prognozė).
-- **Vėjas** – Open-Meteo prognozuojamas greitis, kryptis ir gūsiai.
+- **Vėjas** – animuotos vėjo dalelės ir Open-Meteo prognozuojamas greitis, kryptis bei gūsiai. Dalelės juda pagal apytikslę 10 apskričių vėjo duomenų interpoliaciją (ne „Windy“ detalumo modelis).
 - **Sniegas** – Open-Meteo prognozuojamas snygis.
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
+- **📍 Mano vieta** – rodo būtent dashboardą atidariusio telefono / planšetės / kompiuterio vietą. Vietos nustatymo prašoma tik paspaudus mygtuką; pakartotinai atidarius ir turint iš anksto suteiktą leidimą, ji gali būti įjungiama automatiškai. Vietos koordinatės naudojamos tik naršyklėje, nesiunčiamos į Home Assistant serverį. **Reikalinga HTTPS prieiga** arba kita naršyklės laikoma saugia aplinka; vietinis HTTP IP adresas paprastai neveiks.
 
-**Versija:** [v0.1.1](https://github.com/braticks/lt72-weather-map/releases/tag/v0.1.1) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.2.0](https://github.com/braticks/lt72-weather-map/releases/tag/v0.2.0) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -31,7 +32,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.1.1`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.2.0`.
 
 ## Saugumas ir informacija
 
@@ -42,3 +43,16 @@ Duomenys: [LT72](https://lt72.lt/), [RainViewer](https://www.rainviewer.com/) ir
 RainViewer vieša nemokama API skirta asmeniniam / mokomajam naudojimui ir turi greičio apribojimus. Komerciniam naudojimui tikrinkite tiekėjo sąlygas. Žemėlapis **neįterpia Windy iframe**; visi sluoksniai sudedami ant to paties žemėlapio.
 
 *Pastaba: naujos RainViewer versijos radaro kadrų keliai turi 12 simbolių identifikatorius, todėl integracija priima ir naują, ir seną URL formatą.*
+
+### Papildomi YAML nustatymai
+
+```yaml
+type: custom:lt72-weather-map
+layer: wind
+animated_wind: true
+wind_particles: medium # low | medium | high
+show_location: true
+show_weather_labels: true
+```
+
+Jei įrenginio vietos nustatymas nepavyksta, korta **nenaudoja serverio adreso** kaip pakaitalo. Vietos rodymą galima išjungti per kortos vizualinį redaktorių. Vietos aptikimui kompiuteryje reikia įjungtų sistemos vietos nustatymo paslaugų; telefonu dažniausiai tiksliau nustato GPS. Vietos žymeklis rodomas tik Lietuvos žemėlapio ribose.

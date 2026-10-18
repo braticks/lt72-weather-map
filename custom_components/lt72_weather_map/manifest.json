@@ -1,7 +1,7 @@
 {
   "domain": "lt72_weather_map",
   "name": "LT72 Weather Map",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "documentation": "https://github.com/braticks/lt72-weather-map",
   "issue_tracker": "https://github.com/braticks/lt72-weather-map/issues",
   "codeowners": [

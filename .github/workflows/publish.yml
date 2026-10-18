@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/publish.yml"
+      - "custom_components/lt72_weather_map/manifest.json"
   workflow_dispatch:
 
 permissions:
@@ -57,4 +58,4 @@ jobs:
           fi
           gh release create "$TAG" --target "$(git rev-parse HEAD)" \
             --title "LT72 Weather Map $TAG" \
-            --notes "Initial standalone Home Assistant integration with Lithuanian LT72 air-alert county map, RainViewer rain radar, Open-Meteo wind and snow layers, UI configuration, and native Home Assistant icon (brand/icon.png). Experimental integration: not a replacement for official emergency alerts."
+            --notes "LT72 Weather Map $TAG: animated interpolated Open-Meteo wind particles, optional dashboard-device geolocation marker (permission and HTTPS required), adjustable particle density, RainViewer precipitation radar, snow overlays and Lithuanian LT72 alert counties. Includes native Home Assistant icon. Unofficial preview: NOT a replacement for emergency alerts."

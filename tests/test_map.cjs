@@ -76,4 +76,8 @@ assert(!hidden.includes('<div class="detail">'));
 assert(!hidden.includes('<div class="header">'));
 assert(!hidden.includes('<div class="toolbar">'));
 assert(hidden.includes('<svg viewBox="0 0 760 444"'));
+card.setConfig({type:"custom:lt72-weather-map",layer:"wind"});
+assert.equal(card._mode,"wind");
+card.setConfig({type:"custom:lt72-weather-map",layer:"snow"});
+assert.equal(card._mode,"snow");
 console.log("All 10 counties, weather overlays, RainViewer tiles and UI editor passed.");

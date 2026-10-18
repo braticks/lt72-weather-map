@@ -145,10 +145,11 @@ class LT72WeatherMapCard extends HTMLElement {
  setConfig(config){
    if(!config||config.type!=="custom:lt72-weather-map")throw Error("Netinkamas LT72 Weather Map kortos tipas");
    const before=this._config.region;
+   const previousLayer=this._config.layer;
    this._config={...config};
    if(WMAP_BY_KEY[config.region])this._selected=config.region;
    else if(before!==config.region)this._selected=null;
-   this._mode=this._mode||config.layer||"radar";
+   if(this._mode===null||previousLayer!==config.layer)this._mode=config.layer||"radar";
    if(!WMAP_MODES.some(m=>m[0]===this._mode))this._mode="radar";
    this._render();
  }

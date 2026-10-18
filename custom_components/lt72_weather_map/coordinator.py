@@ -16,7 +16,7 @@ from aiohttp import ClientError, ClientTimeout
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import COUNTIES, DOMAIN, SOURCE_LT72, SOURCE_METEO, SOURCE_RADAR
+from .const import DOMAIN, METEO_POINTS, SOURCE_LT72, SOURCE_METEO, SOURCE_RADAR
 from .parser import parse_air_alerts
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,13 +24,13 @@ RADAR_PATH = re.compile(r"^/v2/radar/(?:[0-9]{9,12}|[0-9a-f]{12})$")
 
 
 def parse_meteo(data: object) -> dict:
-    """Parse multi-location current forecasts, keyed by Lithuanian county."""
-    if not isinstance(data, list) or len(data) != len(COUNTIES):
-        raise ValueError("Open-Meteo returned an unexpected number of counties")
+    """Parse forecast samples at county capitals and additional cities."""
+    if not isinstance(data, list) or len(data) != len(METEO_POINTS):
+        raise ValueError("Open-Meteo returned an unexpected number of locations")
     parsed = {}
     required = ("wind_speed_10m", "wind_direction_10m",
                 "wind_gusts_10m", "snowfall", "precipitation")
-    for county, record in zip(COUNTIES, data):
+    for county, record in zip(METEO_POINTS, data):
         current = record.get("current") if isinstance(record, dict) else None
         if not isinstance(current, dict):
             raise ValueError("Open-Meteo current data is missing")
@@ -125,7 +125,7 @@ class LT72WeatherCoordinator(DataUpdateCoordinator[dict]):
                 or now - self._weather_time >= timedelta(minutes=10)):
             self._weather_time = now
             try:
-                rows = list(COUNTIES.values())
+                rows = list(METEO_POINTS.values())
                 params = {
                     "latitude": ",".join(str(x[1]) for x in rows),
                     "longitude": ",".join(str(x[2]) for x in rows),

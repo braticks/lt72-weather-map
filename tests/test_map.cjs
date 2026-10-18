@@ -49,7 +49,9 @@ assert.equal(vm.runInContext("wmapTemperatureLabel(-2.6)",ctx),"-3°");
 assert.equal(vm.runInContext("wmapTemperatureLabel(0)",ctx),"0°");
 assert.equal(vm.runInContext("wmapTemperatureLabel(null)",ctx),null);
 assert.equal(vm.runInContext("wmapTemperatureLabel(undefined)",ctx),null);
-assert.equal(vm.runInContext("WMAP_MAIN_CITIES.length",ctx),5);
+assert.equal(vm.runInContext("WMAP_MAIN_CITIES.length",ctx),6);
+assert.equal(vm.runInContext("WMAP_EXTRA_CITY_POINTS.length",ctx),1);
+assert.equal(vm.runInContext('WMAP_EXTRA_CITY_POINTS[0][1]',ctx),"Biržai");
 assert.equal(new Set(paths.map(x=>x.key)).size,10);
 assert(paths.every(x=>x.d.startsWith("M")&&!x.d.includes("NaN")));
 assert(paths.every(x=>Number.isFinite(x.x)&&x.x>=0&&x.x<=760));
@@ -127,7 +129,8 @@ const attributes={
     vilniaus:{temperature_c:10},klaipedos:{temperature_c:6.2},
     siauliu:{temperature_c:7},panevezio:{temperature_c:8},
     alytaus:{temperature_c:8},marijampoles:{temperature_c:9},
-    taurages:{temperature_c:7},telsiu:{temperature_c:5},utenos:{temperature_c:4}},
+    taurages:{temperature_c:7},telsiu:{temperature_c:5},utenos:{temperature_c:4},
+    birzai:{temperature_c:3.6}},
   radar:valid
 };
 card.setConfig({type:"custom:lt72-weather-map",region:"kauno",layer:"radar"});
@@ -274,14 +277,16 @@ console.log("50m neighbor borders, optional footers, source disclosure, visible 
 
 card.setConfig({type:"custom:lt72-weather-map",layer:"radar"});
 const fiveCityHtml=card.shadowRoot.innerHTML;
-assert.equal((fiveCityHtml.match(/class="city-temperature /g)||[]).length,5);
+assert.equal((fiveCityHtml.match(/class="city-temperature /g)||[]).length,6);
+assert(fiveCityHtml.includes('aria-label="Biržai +4°"'));
+assert(fiveCityHtml.includes("Biržai"));
 assert(fiveCityHtml.includes("Kaunas"));
 assert(fiveCityHtml.includes("+9°"));
 assert(fiveCityHtml.includes('class="city-value"'));
 assert(!fiveCityHtml.includes('aria-label="Alytus +8°"'));
 card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",city_temperature_set:"all"});
 const tenCitiesHtml=card.shadowRoot.innerHTML;
-assert.equal((tenCitiesHtml.match(/class="city-temperature /g)||[]).length,10);
+assert.equal((tenCitiesHtml.match(/class="city-temperature /g)||[]).length,11);
 assert(tenCitiesHtml.includes('aria-label="Alytus +8°"'));
 card.setConfig({type:"custom:lt72-weather-map",layer:"radar",show_city_temperatures:false});
 const noCitiesHtml=card.shadowRoot.innerHTML;
@@ -294,3 +299,8 @@ assert.equal(editor.event.detail.config.show_city_temperatures,false);
 editor._change("city_temperature_set","all");
 assert.equal(editor.event.detail.config.city_temperature_set,"all");
 console.log("Main city temperatures, all-county mode, hide toggle and no false zero verified.");
+
+const birzaiPosition=vm.runInContext("wmapProjection().xy(24.7567,56.2045)",ctx);
+assert(birzaiPosition[0]>0&&birzaiPosition[0]<760);
+assert(birzaiPosition[1]>0&&birzaiPosition[1]<444);
+console.log("Biržai independent weather sample and overlay position verified.");

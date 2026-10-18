@@ -15,11 +15,14 @@ const WMAP_REGIONS = [
   ["vilniaus","Vilniaus","Vilnius",25.2797,54.6872]
 ];
 const WMAP_BY_KEY=Object.fromEntries(WMAP_REGIONS.map(r=>[r[0],r]));
-// Default is only five largest cities, avoiding visual clutter on phones.
-const WMAP_MAIN_CITIES=["vilniaus","kauno","klaipedos","siauliu","panevezio"];
+const WMAP_EXTRA_CITY_POINTS=[
+ ["birzai","Biržai",24.7567,56.2045]
+];
+// Five largest cities, plus Biržai; the alert county set stays unchanged.
+const WMAP_MAIN_CITIES=["vilniaus","kauno","klaipedos","siauliu","panevezio","birzai"];
 const WMAP_CITY_SETS=[
- ["main","5 pagrindiniai miestai"],
- ["all","Visi 10 apskričių centrai"]
+ ["main","5 pagrindiniai miestai + Biržai"],
+ ["all","Visi 10 apskričių centrų + Biržai"]
 ];
 function wmapTemperatureLabel(value) {
  if(typeof value!=="number"||!Number.isFinite(value))return null;
@@ -523,7 +526,8 @@ class LT72WeatherMapCard extends HTMLElement {
        '<path d="'+c.d+'" fill="var(--wmap-land)" stroke="none"></path>').join("")+'</g>' : "";
    const cityMode=this._config.city_temperature_set==="all"?"all":"main";
    const visibleCityKeys=new Set(cityMode==="all"?
-     WMAP_REGIONS.map(r=>r[0]):WMAP_MAIN_CITIES);
+     [...WMAP_REGIONS.map(r=>r[0]),...WMAP_EXTRA_CITY_POINTS.map(r=>r[0])]
+     :WMAP_MAIN_CITIES);
    const cityTempKeys=weatherReady&&this._show("show_city_temperatures")
      ?new Set([...visibleCityKeys].filter(key=>
        wmapTemperatureLabel(weather[key]?.temperature_c)!==null))
@@ -596,8 +600,15 @@ class LT72WeatherMapCard extends HTMLElement {
        '<title>⚡ Prognozuojama perkūnija – ne užfiksuotas žaibo smūgis</title></g>':"";
      return defs+flakes+bolt;
    }).join("") : "";
+   const allCityPositions=[
+     ...(this._regions||[]),
+     ...WMAP_EXTRA_CITY_POINTS.map(([key,short,lon,lat])=>{
+       const [x,y]=projection.xy(lon,lat);
+       return {key,short,x,y};
+     })
+   ];
    const cityTemperatures=this._regions&&cityTempKeys.size?
-     this._regions.filter(r=>cityTempKeys.has(r.key)).map(r=>{
+     allCityPositions.filter(r=>cityTempKeys.has(r.key)).map(r=>{
        const c=wmapTemperatureLabel(weather[r.key]?.temperature_c);
        const tempValue=weather[r.key]?.temperature_c;
        const tempColor=tempValue<=0?"cold":tempValue>=25?"hot":"neutral";

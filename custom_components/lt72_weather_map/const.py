@@ -23,6 +23,15 @@ COUNTIES = {
     "vilniaus": ("Vilniaus apskritis", 54.6872, 25.2797),
 }
 
+# One extra location beyond the ten LT72 counties.
+EXTRA_CITIES = {
+    "birzai": ("Biržai", 56.2045, 24.7567),
+}
+
+# Stable order used for request lat/lon lists and parsing their response.
+METEO_POINTS = {**COUNTIES, **EXTRA_CITIES}
+
+
 COLOR_STATES = {
     "red": "Raudona",
     "yellow": "Geltona",

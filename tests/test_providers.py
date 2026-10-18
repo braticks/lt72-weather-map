@@ -22,7 +22,10 @@ scope = {
     "math": math,
     "urlparse": urlparse,
     "RADAR_PATH": re.compile(r"^/v2/radar/(?:[0-9]{9,12}|[0-9a-f]{12})$"),
-    "COUNTIES": {str(i): (str(i), 55, 24) for i in range(10)},
+    "METEO_POINTS": {
+        **{str(i): (str(i), 55, 24) for i in range(10)},
+        "birzai": ("Biržai", 56.2045, 24.7567),
+    },
 }
 exec(compile(ast.Module(body=functions, type_ignores=[]), str(SOURCE), "exec"), scope)
 parse_radar = scope["parse_radar"]
@@ -66,10 +69,11 @@ class Sources(unittest.TestCase):
                 "weather_code": 95,
                 "temperature_2m": 12.75,
                 "time": "2026-10-18T19:00",
-            }} for _ in range(10)
+            }} for _ in range(11)
         ]
         parsed = parse_meteo(values)
-        self.assertEqual(len(parsed), 10)
+        self.assertEqual(len(parsed), 11)
+        self.assertEqual(parsed['birzai']['temperature_c'], 12.8)
         self.assertEqual(parsed["0"]["wind_kmh"], 23.5)
         self.assertEqual(parsed["0"]["snow_cm"], 0.1)
         self.assertEqual(parsed["0"]["weather_code"], 95)
@@ -80,7 +84,7 @@ class Sources(unittest.TestCase):
             "wind_speed_10m": 5, "wind_direction_10m": 180,
             "wind_gusts_10m": 10, "snowfall": 0,
             "precipitation": 0,
-        }} for _ in range(10)]
+        }} for _ in range(11)]
         parsed = parse_meteo(payload)
         self.assertIsNone(parsed["0"]["weather_code"])
         self.assertIsNone(parsed["0"]["temperature_c"])
@@ -90,7 +94,7 @@ class Sources(unittest.TestCase):
             "wind_speed_10m": 5, "wind_direction_10m": 180,
             "wind_gusts_10m": 10, "snowfall": 0,
             "precipitation": 0, "temperature_2m": -3.2,
-        }} for _ in range(10)]
+        }} for _ in range(11)]
         parsed = parse_meteo(payload)
         self.assertEqual(parsed["0"]["temperature_c"], -3.2)
         self.assertTrue(all(item["temperature_c"] == -3.2 for item in parsed.values()))
@@ -100,15 +104,23 @@ class Sources(unittest.TestCase):
             "wind_speed_10m": 5, "wind_direction_10m": 180,
             "wind_gusts_10m": 10, "snowfall": 0,
             "precipitation": 0, "temperature_2m": 0,
-        }} for _ in range(10)]
+        }} for _ in range(11)]
         parsed = parse_meteo(payload)
         self.assertEqual(parsed["0"]["temperature_c"], 0.0)
+        self.assertEqual(parsed["birzai"]["temperature_c"], 0.0)
 
 
     def test_missing_meteo_not_zero(self):
         with self.assertRaises(ValueError):
-            parse_meteo([{"current": {}} for _ in range(10)])
+            parse_meteo([{"current": {}} for _ in range(11)])
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BirzaiLocationTests(unittest.TestCase):
+    def test_birzai_location_is_in_additional_point_not_counties(self):
+        const_file = SOURCE.with_name("const.py").read_text(encoding="utf-8")
+        self.assertIn('"birzai": ("Biržai", 56.2045, 24.7567)', const_file)
+        self.assertIn("METEO_POINTS = {**COUNTIES, **EXTRA_CITIES}", const_file)

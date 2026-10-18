@@ -2,6 +2,7 @@
 
 import ast
 from pathlib import Path
+import math
 import re
 import unittest
 from urllib.parse import urlparse
@@ -18,6 +19,7 @@ functions = [
 ]
 scope = {
     "re": re,
+    "math": math,
     "urlparse": urlparse,
     "RADAR_PATH": re.compile(r"^/v2/radar/(?:[0-9]{9,12}|[0-9a-f]{12})$"),
     "COUNTIES": {str(i): (str(i), 55, 24) for i in range(10)},
@@ -91,8 +93,16 @@ class Sources(unittest.TestCase):
         }} for _ in range(10)]
         parsed = parse_meteo(payload)
         self.assertEqual(parsed["0"]["temperature_c"], -3.2)
-        self.assertEqual(parsed["vilniaus"] if "vilniaus" in parsed else parsed["0"],
-                         parsed["0"])
+        self.assertTrue(all(item["temperature_c"] == -3.2 for item in parsed.values()))
+
+    def test_zero_temperature_kept_as_real_observation(self):
+        payload = [{"current": {
+            "wind_speed_10m": 5, "wind_direction_10m": 180,
+            "wind_gusts_10m": 10, "snowfall": 0,
+            "precipitation": 0, "temperature_2m": 0,
+        }} for _ in range(10)]
+        parsed = parse_meteo(payload)
+        self.assertEqual(parsed["0"]["temperature_c"], 0.0)
 
 
     def test_missing_meteo_not_zero(self):

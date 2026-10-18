@@ -15,7 +15,7 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
 - **📍 Mano vieta** – rodo būtent dashboardą atidariusio telefono / planšetės / kompiuterio vietą. Vietos nustatymo prašoma tik paspaudus mygtuką; pakartotinai atidarius ir turint iš anksto suteiktą leidimą, ji gali būti įjungiama automatiškai. Vietos koordinatės naudojamos tik naršyklėje, nesiunčiamos į Home Assistant serverį. **Reikalinga HTTPS prieiga** arba kita naršyklės laikoma saugia aplinka; vietinis HTTP IP adresas paprastai neveiks.
 
-**Versija:** [v0.4.0](https://github.com/braticks/lt72-weather-map/releases/tag/v0.4.0) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.0](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.0) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -33,7 +33,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.4.0`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.0`.
 
 ## Saugumas ir informacija
 
@@ -82,4 +82,26 @@ layer: radar
 show_snowflakes: true
 show_thunderstorms: true
 show_precip_legend: true
+```
+
+### Kaimyninės šalys ir žemėlapio temos (v0.5.0)
+
+Žemėlapio foną ir kaimyninių valstybių kontūrus galima keisti **viename kortos UI redaktoriuje**:
+
+- **Pilkas** – „Windy“ įkvėptas pilkų atspalvių fonas;
+- **Šviesus** – neutralus, šviesus jūros ir žemės fonas;
+- **Tamsus** – tamsi tema;
+- **Melsvas** – melsvi jūros ir žemės atspalviai.
+
+Fone yra **Lenkijos, Latvijos, Baltarusijos, Kaliningrado srities** ir kitų pakraštyje pasitaikančių valstybių administracinės sienos. Ribų šaltinis: [Natural Earth 1:110m Countries](https://www.naturalearthdata.com/downloads/110m-cultural-vectors/110m-admin-0-countries/) (public domain), supaprastintas ir nukirptas iki Lietuvos apylinkių. Kaimyninių šalių sienos specialiai blankesnės už Lietuvos apskritis. **Tai ne gatvių žemėlapis ar tikslus sienų matavimo šaltinis.** Internete jokių fono žemėlapių plytelių ir API raktų nereikia.
+
+Vėjo animacijos dalelės dabar juda proporcingai interpoliuotam Open-Meteo **km/h** greičiui: esant labai silpnam vėjui animacija praktiškai sustoja, o stipresnis vėjas juda sparčiau, su ilgesniu ir ryškesniu pėdsaku. Tai vizualus modelis (ne Windy vėjo lauko rezoliucija).
+
+```yaml
+type: custom:lt72-weather-map
+layer: wind
+map_theme: gray  # gray | light | dark | blue
+show_neighbor_borders: true
+show_neighbor_labels: true
+animated_wind: true
 ```

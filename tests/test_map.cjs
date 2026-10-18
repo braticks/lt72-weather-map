@@ -21,6 +21,20 @@ const ctx={
 vm.createContext(ctx);vm.runInContext(source,ctx);
 ctx.topo=topo;
 const paths=vm.runInContext("wmapDecode(topo)",ctx);
+const neighborSource=JSON.parse(fs.readFileSync(path.join(dir,"neighbors.json"),"utf8"));
+ctx.neighborSource=neighborSource;
+const neighbors=vm.runInContext("wmapNeighborPaths(neighborSource)",ctx);
+assert(neighbors.length>=4);
+assert(neighbors.some(n=>n.name==="Poland"));
+assert(neighbors.some(n=>n.name==="Latvia"));
+assert(neighbors.every(n=>n.d.startsWith("M")&&!n.d.includes("NaN")));
+const slow=vm.runInContext("wmapWindMotion(3)",ctx);
+const medium=vm.runInContext("wmapWindMotion(18)",ctx);
+const strong=vm.runInContext("wmapWindMotion(70)",ctx);
+assert.equal(vm.runInContext("wmapWindMotion(0).pixelsPerSecond",ctx),0);
+assert(slow.pixelsPerSecond < medium.pixelsPerSecond && medium.pixelsPerSecond < strong.pixelsPerSecond);
+assert(slow.alpha < medium.alpha && medium.alpha < strong.alpha);
+assert(slow.trailLength < medium.trailLength && medium.trailLength < strong.trailLength);
 assert.equal(paths.length,10);
 assert.equal(new Set(paths.map(x=>x.key)).size,10);
 assert(paths.every(x=>x.d.startsWith("M")&&!x.d.includes("NaN")));
@@ -85,6 +99,7 @@ editor._change("show_legend",true);
 assert.equal(Object.hasOwn(editor.event.detail.config,"show_legend"),false);
 const card=vm.runInContext("new LT72WeatherMapCard()",ctx);
 card._regions=paths;
+card._neighbors=neighbors;
 const attributes={
   saltinis:"LT72 Weather Map",apskritis:"Kauno apskritis",
   alerts_available:true, weather_available:true,radar_available:true,
@@ -172,3 +187,21 @@ assert.equal(editor.event.detail.config.show_snowflakes,false);
 editor._change("show_thunderstorms",false);
 assert.equal(editor.event.detail.config.show_thunderstorms,false);
 console.log("Rain, forecast snowflakes, storm model and UI toggles passed.");
+
+card.setConfig({type:"custom:lt72-weather-map",layer:"wind",map_theme:"dark"});
+const darkMap=card.shadowRoot.innerHTML;
+assert(darkMap.includes("--wmap-sea:#1d2a35"));
+assert(darkMap.includes('class="neighbor-outlines"'));
+assert(darkMap.includes("Kaliningrado sritis"));
+assert(darkMap.includes('class="neighbor-land"'));
+card.setConfig({type:"custom:lt72-weather-map",layer:"radar",map_theme:"light",show_neighbor_labels:false,show_neighbor_borders:false});
+const minimalMap=card.shadowRoot.innerHTML;
+assert(minimalMap.includes("--wmap-sea:#dbeaf0"));
+assert(!minimalMap.includes('class="neighbor-label"'));
+assert(!minimalMap.includes('class="neighbor"'));
+assert(minimalMap.includes('class="neighbor-land"'));
+editor._change("map_theme","blue");
+assert.equal(editor.event.detail.config.map_theme,"blue");
+editor._change("show_neighbor_borders",false);
+assert.equal(editor.event.detail.config.show_neighbor_borders,false);
+console.log("Neighboring country polygons, map themes and strength-dependent wind animation passed.");

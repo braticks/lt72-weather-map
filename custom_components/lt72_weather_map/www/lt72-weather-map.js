@@ -27,11 +27,30 @@ const WMAP_MODES=[
  ["radar","🌧️ Radaras"],["wind","💨 Vėjas"],
  ["snow","❄️ Sniegas"],["satellite","☁️ Palydovas"],["all","🌦️ Visi"],["none","🗺️ Tik pavojus"]
 ];
+// Local, lightweight basemaps; no third-party tile account or API key needed.
+const WMAP_MAP_THEMES=[
+ ["gray","Pilkas (Windy stilius)"],
+ ["light","Šviesus"],
+ ["dark","Tamsus"],
+ ["blue","Melsvas"]
+];
+const WMAP_THEME_COLORS={
+ gray:{sea:"#7b858c",land:"#a7acb1",outline:"#69757f",names:"#384b5a",county:"#4c6476",label:"#263f55"},
+ light:{sea:"#dbeaf0",land:"#f2f2ec",outline:"#a9b6b6",names:"#697b86",county:"#94a7aa",label:"#284559"},
+ dark:{sea:"#1d2a35",land:"#354451",outline:"#697984",names:"#acbdc9",county:"#8ca2b0",label:"#edf6fc"},
+ blue:{sea:"#a9d0e4",land:"#dbe9e6",outline:"#83a3b4",names:"#527c8d",county:"#7f9ca7",label:"#274c64"}
+};
+const WMAP_COUNTRY_LABELS=[
+ ["Latvija",24.6,56.26],["Baltarusija",27.4,54.35],
+ ["Lenkija",22.0,54.07],["Kaliningrado sritis",21.64,54.34]
+];
 const WMAP_FLAGS=[
  ["show_header","Rodyti antraštę"],
  ["show_icon","Rodyti ikoną"],
  ["show_subtitle","Rodyti šaltinių būseną"],
  ["show_region_labels","Rodyti apskričių pavadinimus"],
+ ["show_neighbor_borders","Rodyti kaimyninių šalių kontūrus"],
+ ["show_neighbor_labels","Rodyti kaimyninių šalių pavadinimus"],
  ["show_alerts","Rodyti oro pavojaus spalvas"],
  ["show_weather_labels","Rodyti vėjo / sniego reikšmes"],
  ["show_details","Rodyti pasirinktos apskrities duomenis"],
@@ -124,6 +143,30 @@ function wmapDecode(topo){
      d:polygons.map(draw).join(" "),x,y};
  });
 }
+// Natural Earth country boundaries bundled as local, key-free polygons.
+function wmapNeighborPaths(geometry, proj=wmapProjection()){
+ if(!geometry||!Array.isArray(geometry.features))return [];
+ return geometry.features.map(country=>{
+   const polygons=country.polygons||[];
+   const path=polygons.map(rings=>rings.map(ring=>
+     ring.map((coord,i)=>{
+       const [x,y]=proj.xy(coord[0],coord[1]);
+       return (i?"L":"M")+x.toFixed(1)+","+y.toFixed(1);
+     }).join(" ")+"Z"
+   ).join(" ")).join(" ");
+   return {name:country.name,d:path};
+ }).filter(f=>f.d.startsWith("M"));
+}
+function wmapWindMotion(speed){
+ const value=Number(speed);
+ if(!Number.isFinite(value)||value<0.6) return {pixelsPerSecond:0,trailLength:0,alpha:0,lineWidth:0};
+ return {
+   pixelsPerSecond:Math.min(142,value*2.05),
+   trailLength:Math.min(15,Math.max(3,Math.round(3+value/6))),
+   alpha:Math.min(0.93,0.20+value/70),
+   lineWidth:Math.min(2.8,1.1+value/55)
+ };
+}
 function wmapState(alertsAvailable,alertRecord){
  if(!alertsAvailable)return "unavailable";
  if(!alertRecord)return "not_reported";
@@ -214,7 +257,7 @@ class LT72WeatherMapCard extends HTMLElement {
    super();
    this.attachShadow({mode:"open"});
    this._config={type:"custom:lt72-weather-map"};
-   this._hass=null;this._regions=null;this._loading=false;this._error="";
+   this._hass=null;this._regions=null;this._neighbors=null;this._loading=false;this._error="";
    this._selected=null;this._mode=null;this._radarIndex=null;
    this._windRaf=null;this._windParticles=[];this._windLastTime=0;
    this._devicePosition=null;this._geolocationError="";
@@ -311,6 +354,8 @@ class LT72WeatherMapCard extends HTMLElement {
    if(typeof matchMedia==="function" && matchMedia("(prefers-reduced-motion: reduce)").matches)return;
    const context=canvas.getContext?.("2d");
    if(!context)return;
+   const dark=this._config.map_theme==="dark";
+   const ink=dark?"186,231,255":"22,104,160";
    const counts={low:45,medium:95,high:155};
    const count=counts[this._config.wind_particles]||95;
    const seed=()=>({x:Math.random()*760,y:Math.random()*444,
@@ -328,21 +373,21 @@ class LT72WeatherMapCard extends HTMLElement {
      for(let i=0;i<this._windParticles.length;i++){
        let p=this._windParticles[i];
        const vector=wmapWindField(samples,p.x,p.y);
-       if(!vector||vector.speed<0.6){p.age+=4;continue;}
-       const factor=Math.min(3.2,Math.max(.8,vector.speed/13));
-       p.x+=vector.vx/Math.max(vector.speed,0.6)*factor*42*dt;
-       p.y+=vector.vy/Math.max(vector.speed,0.6)*factor*42*dt;
+       const motion=wmapWindMotion(vector?.speed);
+       if(!vector||motion.pixelsPerSecond===0){p.age+=4;continue;}
+       p.x+=vector.vx/vector.speed*motion.pixelsPerSecond*dt;
+       p.y+=vector.vy/vector.speed*motion.pixelsPerSecond*dt;
        p.trail.push([p.x,p.y]);
-       if(p.trail.length>8)p.trail.shift();
+       if(p.trail.length>motion.trailLength)p.trail.shift();
        p.age++;
        if(p.age>85||p.x<0||p.y<0||p.x>760||p.y>444){
          this._windParticles[i]=seed();
          continue;
        }
        for(let j=1;j<p.trail.length;j++){
-         const alpha=(j/p.trail.length)*0.67;
-         context.strokeStyle="rgba(18,104,177,"+alpha.toFixed(3)+")";
-         context.lineWidth=1.65;
+         const alpha=(j/p.trail.length)*motion.alpha;
+         context.strokeStyle="rgba("+ink+","+alpha.toFixed(3)+")";
+         context.lineWidth=motion.lineWidth;
          context.beginPath();
          context.moveTo(p.trail[j-1][0],p.trail[j-1][1]);
          context.lineTo(p.trail[j][0],p.trail[j][1]);
@@ -360,6 +405,15 @@ class LT72WeatherMapCard extends HTMLElement {
      if(!response.ok)throw Error("HTTP "+response.status);
      this._regions=wmapDecode(await response.json());
      this._error="";
+     try{
+       const neighborResponse=await fetch(WMAP_URL+"neighbors.json");
+       if(!neighborResponse.ok)throw Error("HTTP "+neighborResponse.status);
+       this._neighbors=wmapNeighborPaths(await neighborResponse.json());
+     }catch(error){
+       // Country basemap is optional; do not hide LT72 / weather on failure.
+       this._neighbors=[];
+       console.warn("LT72 Weather Map: neighboring country outlines unavailable",error);
+     }
    }catch(exc){this._error="Nepavyko įkelti Lietuvos žemėlapio: "+exc.message;}
    finally{this._loading=false;this._render();}
  }
@@ -394,6 +448,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const showThunder=(mode==="snow"||mode==="radar"||mode==="all")&&weatherReady;
    const chosenFrame=frames[this._radarIndex]||null;
    const projection=wmapProjection();
+   const theme=WMAP_THEME_COLORS[this._config.map_theme]||WMAP_THEME_COLORS.gray;
    const currentBucket=Math.floor(Date.now()/600000);
    if(this._satelliteBucket!==currentBucket){
      this._satelliteBucket=currentBucket;
@@ -409,22 +464,35 @@ class LT72WeatherMapCard extends HTMLElement {
        '" width="'+t.w.toFixed(1)+'" height="'+t.h.toFixed(1)+
        '" preserveAspectRatio="none"></image>').join("");
    }
+   const neighbors=this._config.show_neighbor_borders!==false&&this._neighbors?
+     this._neighbors.map(c=>'<path class="neighbor" d="'+c.d+'"></path>').join("") : "";
+   const neighborBase=this._neighbors?
+     '<g class="neighbor-land">'+this._neighbors.map(c=>
+       '<path d="'+c.d+'" fill="var(--wmap-land)" stroke="none"></path>').join("")+'</g>' : "";
+   const countryLabels=this._config.show_neighbor_labels!==false&&this._neighbors?
+     WMAP_COUNTRY_LABELS.map(([name,lon,lat])=>{
+       const [x,y]=projection.xy(lon,lat);
+       return '<text class="neighbor-label" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+
+         '" text-anchor="middle">'+WMAP_ESC(name)+'</text>';
+     }).join("") : "";
    const regionsHtml=this._regions?this._regions.map(s=>{
      const value=alerts[s.key], code=wmapState(activeAlerts,value);
      const color=WMAP_LEVELS[code]?.[1]||WMAP_LEVELS.unavailable[1];
-     // Colour active alert districts; other polygons are lightly filled above radar.
+     // Keep subdued country geography visible under the LT72 alert overlay.
      const isActive=["red","yellow","yellow_after_red"].includes(code);
-     const opacity=(showRadar||showSatellite)?(isActive?0.63:0.08):1;
+     const alertShown=this._show("show_alerts");
+     const opacity=alertShown?(isActive?0.68:code==="unavailable"?0.16:0.05):0;
      const select=s.key===region[0];
-     const outline=select?"#2677d6":"var(--secondary-text-color,#64748b)";
-     const bgFill=this._show("show_alerts")?color:"#f4f6fa";
+     const outline=select?"var(--primary-color,#2677d6)":"var(--wmap-county)";
+     const bgFill=alertShown?color:"#f4f6fa";
      const text=this._show("show_region_labels")?
        '<text x="'+s.x.toFixed(1)+'" y="'+(s.y-13).toFixed(1)+
        '" text-anchor="middle" class="county-label">'+WMAP_ESC(s.short)+'</text>':"";
      return '<g role="button" tabindex="0" data-region="'+s.key+
        '" aria-label="'+WMAP_ESC(s.name+" apskritis: "+WMAP_LEVELS[code][0])+'">'+
        '<path d="'+s.d+'" fill="'+bgFill+'" fill-opacity="'+opacity+
-       '" stroke="'+outline+'" stroke-width="'+(select?3:1.45)+
+       '" stroke="'+outline+'" stroke-opacity="'+(select?0.95:0.62)+
+       '" stroke-width="'+(select?2.65:0.95)+
        '" stroke-dasharray="'+(code==="not_reported"&&!select?"4 3":"none")+
        '" stroke-linejoin="round"></path>'+text+'</g>';
    }).join(""):"";
@@ -539,7 +607,8 @@ class LT72WeatherMapCard extends HTMLElement {
      '</b>'+(this._show("show_subtitle")?'<small>'+WMAP_ESC(statusText)+'</small>':"")+
      '</div></div>':"";
    const toolbar=this._show("show_toolbar")?'<div class="toolbar">'+buttons+'</div>':"";
-   const attribution='<div class="credits"><a href="https://lt72.lt/" target="_blank" rel="noopener noreferrer">LT72</a>'+
+   const attribution='<div class="credits">Made with <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>'+
+     ' · <a href="https://lt72.lt/" target="_blank" rel="noopener noreferrer">LT72</a>'+
      ' · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>'+
      ((mode==="radar"||mode==="all")?
        ' · Weather data by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>':'')+
@@ -560,13 +629,16 @@ class LT72WeatherMapCard extends HTMLElement {
      '.toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}',
      '.mode{border:1px solid var(--divider-color,#9ca3af);color:var(--primary-text-color);background:var(--secondary-background-color,#f3f4f6);font:inherit;font-size:12px;padding:7px 9px;border-radius:8px;cursor:pointer}',
      '.mode.active{border-color:var(--primary-color,#2196f3);box-shadow:inset 0 0 0 1px var(--primary-color,#2196f3);font-weight:700}',
-     '.map{position:relative;background:var(--secondary-background-color,#edf0f4);border-radius:10px;overflow:hidden}', 
+     '.map{position:relative;background:var(--wmap-sea,#7b858c);border-radius:10px;overflow:hidden}',
+     '.neighbor{fill:none;stroke:var(--wmap-border);stroke-width:1.35;stroke-opacity:.48;pointer-events:none}',
+     '.neighbor-label{font:500 13px Roboto,Arial,sans-serif;fill:var(--wmap-names);stroke:var(--wmap-land);stroke-width:2px;paint-order:stroke;pointer-events:none}',
+     '.neighbor-land{pointer-events:none}', 
      '.wind-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}',
      '.locate-button{position:absolute;z-index:4;bottom:9px;right:9px;font:inherit;font-size:11px;padding:7px 9px;border:1px solid var(--divider-color);border-radius:8px;background:var(--card-background-color,#fff);color:var(--primary-text-color);cursor:pointer;box-shadow:0 1px 4px #0003}',
      '.gps-pulse{transform-box:fill-box;transform-origin:center;animation:gpsPulse 2s ease-in-out infinite}',
      '@keyframes gpsPulse{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:.85;transform:scale(1.25)}}',
      '.map svg{width:100%;height:auto;display:block;max-height:470px}',
-     '.county-label{font:bold 13px Roboto,Arial,sans-serif;fill:#18253b;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;pointer-events:none}',
+     '.county-label{font:600 13px Roboto,Arial,sans-serif;fill:var(--wmap-label);paint-order:stroke;stroke:var(--wmap-land);stroke-width:3px;stroke-linejoin:round;pointer-events:none}',
      '.weather-label{font:bold 12px Roboto,Arial,sans-serif;fill:#134e86;paint-order:stroke;stroke:#fff;stroke-width:3.5px;pointer-events:none}',
      '.snow-label{font:29px Arial,sans-serif;fill:#0ea5e9;paint-order:stroke;stroke:#fff;stroke-width:3px;pointer-events:none}',
      '.forecast-snowflake{font-family:Arial,sans-serif;fill:#e2f7ff;stroke:#2b86b8;stroke-width:.6px;paint-order:stroke;pointer-events:none;filter:drop-shadow(0 1px 1px #0f416688)}',
@@ -595,13 +667,18 @@ class LT72WeatherMapCard extends HTMLElement {
      '.compact{padding:8px}.compact .header{margin-bottom:5px}.compact .mode{font-size:11px;padding:5px}.compact .toolbar{margin-bottom:6px}',
      '@media(max-width:480px){.county-label{font-size:16px}.weather-label{font-size:16px}ha-card{padding:10px}.toolbar{gap:4px}.mode{padding:6px;font-size:11px}}',
      '</style>',
-     '<ha-card'+(this._config.compact?' class="compact"':'')+'>',header,toolbar,
+     '<ha-card'+(this._config.compact?' class="compact"':'')+
+       ' style="--wmap-sea:'+theme.sea+';--wmap-land:'+theme.land+
+       ';--wmap-border:'+theme.outline+';--wmap-names:'+theme.names+
+       ';--wmap-county:'+theme.county+';--wmap-label:'+theme.label+'">',header,toolbar,
      '<div class="map">',
      this._error?'<div class="missing">'+WMAP_ESC(this._error)+'</div>':
      !this._regions?'<div class="missing">Įkeliamas Lietuvos žemėlapis...</div>':
        '<svg viewBox="0 0 760 444" aria-label="LT72 pavojaus ir orų žemėlapis" role="img">'+
-         '<rect x="0" y="0" width="760" height="444" fill="var(--secondary-background-color,#e7eff4)"></rect>'+
-         satelliteImage+images+regionsHtml+weatherHtml+forecastSymbols+deviceMarker+'</svg>'+
+         '<rect x="0" y="0" width="760" height="444" fill="var(--wmap-sea)"></rect>'+
+         neighborBase+satelliteImage+images+
+         '<g class="neighbor-outlines">'+neighbors+'</g>'+
+         countryLabels+regionsHtml+weatherHtml+forecastSymbols+deviceMarker+'</svg>'+
          (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':""),
      locationButton,
      (mapMissing?'<div class="overlay-alert">⚠ '+WMAP_ESC(mode==="radar"?
@@ -690,6 +767,11 @@ class LT72WeatherMapEditor extends HTMLElement {
      '</select></label>',
      '<label class="field"><span>Pradinis sluoksnis</span><select data-select="layer">',
      ...WMAP_MODES.map(m=>'<option value="'+m[0]+'"'+((current.layer||"radar")===m[0]?' selected':'')+'>'+WMAP_ESC(m[1])+'</option>'),
+     '</select></label>',
+     '<label class="field"><span>Žemėlapio tema</span><select data-select="map_theme">',
+     ...WMAP_MAP_THEMES.map(([id,name])=>
+       '<option value="'+id+'"'+((current.map_theme||"gray")===id?' selected':'')+'>'+
+       WMAP_ESC(name)+'</option>'),
      '</select></label>',
      '<h4>Rodyti / slėpti</h4><div class="flags">'+flags+'</div>',
      '<h4>Vėjo animacija</h4>',

@@ -15,7 +15,7 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
 - **📍 Mano vieta** – rodo būtent dashboardą atidariusio telefono / planšetės / kompiuterio vietą. Vietos nustatymo prašoma tik paspaudus mygtuką; pakartotinai atidarius ir turint iš anksto suteiktą leidimą, ji gali būti įjungiama automatiškai. Vietos koordinatės naudojamos tik naršyklėje, nesiunčiamos į Home Assistant serverį. **Reikalinga HTTPS prieiga** arba kita naršyklės laikoma saugia aplinka; vietinis HTTP IP adresas paprastai neveiks.
 
-**Versija:** [v0.5.1](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.1) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.2](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.2) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -33,7 +33,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.1`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.2`.
 
 ## Saugumas ir informacija
 
@@ -118,4 +118,20 @@ layer: satellite
 satellite_style: ir          # ir | geocolour
 satellite_opacity: subtle   # subtle | normal | strong
 map_theme: gray
+```
+
+### v0.5.2 – tikslesnės sienos, išjungiamas tekstas ir matomas vėjas
+
+- Kaimyninių šalių kontūrų geometrija pakeista iš **Natural Earth 1:110m** į **1:50m** (world-atlas@2 duomenys, public domain). `neighbors.json` dabar apima žymiai daugiau Latvijos, Lenkijos, Baltarusijos, Lietuvos, Rusijos Kaliningrado srities ir Estijos ribų taškų; failas lokaliai saugomas kartu su korta. Lietuviškų apskričių ribos nekeičiamos.
+- Kortos UI turi atskirus jungiklius `show_satellite_info` – palydovo apatinė aiškinamoji eilutė, ir `show_sources` – apatinių šaltinių eilutė. Išjungus šaltinių eilutę lieka tik **ⓘ Šaltiniai** suskleidžiama prieiga prie privalomo šaltinių priskyrimo.
+- Vėjo animacijos skaitomumas pagerintas: storesnės, didesnio kontrasto, švelniai švytinčios dalelės (numatyta `wind_visibility: strong`), daugiau dalelių ir pasirinkimas `normal` / `strong` / `vivid`. Dalelių greitis ir toliau keičiasi pagal modelio vėjo stiprumą.
+
+```yaml
+type: custom:lt72-weather-map
+layer: wind
+map_theme: gray
+wind_particles: high
+wind_visibility: vivid  # normal | strong | vivid
+show_satellite_info: false
+show_sources: false
 ```

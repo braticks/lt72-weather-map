@@ -28,6 +28,11 @@ const WMAP_MODES=[
  ["snow","❄️ Sniegas"],["satellite","☁️ Palydovas"],["all","🌦️ Visi"],["none","🗺️ Tik pavojus"]
 ];
 // Local, lightweight basemaps; no third-party tile account or API key needed.
+const WMAP_WIND_VISIBILITY=[
+ ["normal","Normalus"],
+ ["strong","Ryškus (rekomenduojama)"],
+ ["vivid","Labai ryškus"]
+];
 const WMAP_MAP_THEMES=[
  ["gray","Pilkas (Windy stilius)"],
  ["light","Šviesus"],
@@ -68,6 +73,8 @@ const WMAP_FLAGS=[
  ["show_legend","Rodyti spalvų legendą"],
  ["show_timeline","Rodyti radaro laiko valdymą"],
  ["show_disclaimer","Rodyti perspėjimo paaiškinimą"],
+ ["show_satellite_info","Rodyti apatinį palydovo paaiškinimą"],
+ ["show_sources","Rodyti apatinę šaltinių eilutę"],
  ["show_precip_legend","Rodyti radaro kritulių spalvų paaiškinimą"],
  ["show_snowflakes","Rodyti snaiges prognozuojant snygį"],
  ["show_thunderstorms","Rodyti prognozuojamą perkūniją ⚡"],
@@ -167,6 +174,19 @@ function wmapNeighborPaths(geometry, proj=wmapProjection()){
    ).join(" ")).join(" ");
    return {name:country.name,d:path};
  }).filter(f=>f.d.startsWith("M"));
+}
+function wmapWindStyle(theme,visibility){
+ const bright=theme==="dark"||theme==="gray";
+ const palette=bright?"231,249,255":"22,75,128";
+ const mode=["normal","strong","vivid"].includes(visibility)?visibility:"strong";
+ return {
+   ink:palette,
+   width:mode==="vivid"?2.45:mode==="strong"?1.90:1.25,
+   intensity:mode==="vivid"?1.60:mode==="strong"?1.32:1.0,
+   shadow:bright?"12,35,55":"255,255,255",
+   blur:mode==="normal"?0:mode==="strong"?2.5:4.0,
+   density:mode==="vivid"?1.30:1.0
+ };
 }
 function wmapWindMotion(speed){
  const value=Number(speed);
@@ -369,10 +389,12 @@ class LT72WeatherMapCard extends HTMLElement {
    if(typeof matchMedia==="function" && matchMedia("(prefers-reduced-motion: reduce)").matches)return;
    const context=canvas.getContext?.("2d");
    if(!context)return;
-   const dark=this._config.map_theme==="dark";
-   const ink=dark?"186,231,255":"22,104,160";
-   const counts={low:45,medium:95,high:155};
-   const count=counts[this._config.wind_particles]||95;
+   const appearance=wmapWindStyle(this._config.map_theme,this._config.wind_visibility);
+   const counts={low:75,medium:140,high:220};
+   const count=Math.round((counts[this._config.wind_particles]||140)*appearance.density);
+   context.lineCap="round";
+   context.shadowColor="rgba("+appearance.shadow+",0.52)";
+   context.shadowBlur=appearance.blur;
    const seed=()=>({x:Math.random()*760,y:Math.random()*444,
      age:Math.random()*110,trail:[]});
    this._windParticles=Array.from({length:count},seed);
@@ -400,9 +422,9 @@ class LT72WeatherMapCard extends HTMLElement {
          continue;
        }
        for(let j=1;j<p.trail.length;j++){
-         const alpha=(j/p.trail.length)*motion.alpha;
-         context.strokeStyle="rgba("+ink+","+alpha.toFixed(3)+")";
-         context.lineWidth=motion.lineWidth;
+         const alpha=Math.min(0.98,(0.28+j/p.trail.length*0.72)*motion.alpha*appearance.intensity);
+         context.strokeStyle="rgba("+appearance.ink+","+alpha.toFixed(3)+")";
+         context.lineWidth=Math.max(appearance.width,motion.lineWidth*appearance.width);
          context.beginPath();
          context.moveTo(p.trail[j-1][0],p.trail[j-1][1]);
          context.lineTo(p.trail[j][0],p.trail[j][1]);
@@ -598,7 +620,7 @@ class LT72WeatherMapCard extends HTMLElement {
        '<span class="snow-chip">❄️</span><span>Žydra / balzgana – galimas sniegas</span>'+
        '<small>RainViewer paletė „Universal Blue“ (2). Lietus daugiausia mėlynas, stiprūs krituliai gali būti kitų atspalvių. ❄ žymekliai – Open-Meteo sniego prognozė pagal apskritis; ne radaro snaigių koordinatės. ⚡ – prognozuojama perkūnija, ne užfiksuoti smūgiai.</small>'+
      '</div>' : "";
-   const satelliteGuide=showSatellite?
+   const satelliteGuide=showSatellite&&this._show("show_satellite_info")?
      '<div class="sat-guide">☁️ '+(satelliteStyle==="ir"?
        'Palydoviniai debesys – IR 10,5 µm, vienodas sluoksnis dieną ir naktį.':
        'GeoColour: dienos natūralios spalvos / nakties IR kompozitas. Sutemų riba gali būti ryški.')+
@@ -635,6 +657,9 @@ class LT72WeatherMapCard extends HTMLElement {
      (showSatellite?' · Palydovas © <a href="https://www.eumetsat.int/" target="_blank" rel="noopener noreferrer">EUMETSAT</a>'+
        (satelliteStyle==="geocolour"?'/NASA':""):'')+
      '</div>';
+   const sourcesMarkup=this._show("show_sources")?attribution:
+     '<details class="source-details"><summary title="Duomenų šaltiniai">ⓘ Šaltiniai</summary>'+
+       attribution+'</details>';
    const explanatory=this._show("show_disclaimer")?
      '<div class="fineprint">Balta be pranešimo ≠ oficialus atšaukimas. '+
      'Pilka = nepasiekiama. Radaras rodo stebėtus kritulius, o palydovas – debesų dangą; vėjas, snaigės ir ⚡ perkūnijos žymekliai – modelio prognozė, NE tikri žaibo smūgiai. '+
@@ -686,6 +711,7 @@ class LT72WeatherMapCard extends HTMLElement {
      '.snow-chip{color:#0aa4cc;font-size:16px}',
      '.sat-guide{margin-top:8px;font-size:11px;color:var(--secondary-text-color);line-height:1.35}',
      '.credits{display:flex;justify-content:flex-end;font-size:10px;gap:4px;color:var(--secondary-text-color);margin-top:8px;flex-wrap:wrap}.credits a{color:var(--secondary-text-color);text-decoration:underline}',
+     '.source-details{font-size:10px;text-align:right;color:var(--secondary-text-color);margin-top:4px}.source-details summary{cursor:pointer;display:inline-block;padding:2px 4px}.source-details .credits{margin-top:1px}',
      '.compact{padding:8px}.compact .header{margin-bottom:5px}.compact .mode{font-size:11px;padding:5px}.compact .toolbar{margin-bottom:6px}',
      '@media(max-width:480px){.county-label{font-size:16px}.weather-label{font-size:16px}ha-card{padding:10px}.toolbar{gap:4px}.mode{padding:6px;font-size:11px}}',
      '</style>',
@@ -707,7 +733,7 @@ class LT72WeatherMapCard extends HTMLElement {
        "Radaro duomenys nepasiekiami":"Orų prognozės nepasiekiamos")+'</div>':""),
      '</div>',
      (locationNote?'<div class="geo-note">'+WMAP_ESC(locationNote)+'</div>':""),
-     timeline,precipitationGuide,satelliteGuide,details,legend,explanatory,attribution,
+     timeline,precipitationGuide,satelliteGuide,details,legend,explanatory,sourcesMarkup,
      '</ha-card>'
    ].join("");
    root.querySelectorAll(".satellite-layer").forEach(node=>{
@@ -812,6 +838,10 @@ class LT72WeatherMapEditor extends HTMLElement {
      '<label class="field"><span>Judančių vėjo dalelių kiekis</span><select data-select="wind_particles">',
      ...[["low","Mažai"],["medium","Vidutiniškai"],["high","Daug"]].map(([v,label])=>
        '<option value="'+v+'"'+((current.wind_particles||"medium")===v?' selected':'')+'>'+label+'</option>'),
+     '</select></label>',
+     '<label class="field"><span>Vėjo matomumas</span><select data-select="wind_visibility">',
+     ...WMAP_WIND_VISIBILITY.map(([v,label])=>
+       '<option value="'+v+'"'+((current.wind_visibility||"strong")===v?' selected':'')+'>'+label+'</option>'),
      '</select></label>',
      '<h4>Išdėstymas</h4><label class="compact"><input type="checkbox" data-setting="compact"'+
        (current.compact?' checked':'')+'>Kompaktiška korta</label>',

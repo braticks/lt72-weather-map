@@ -7,19 +7,20 @@ SOURCE_RADAR = "https://api.rainviewer.com/public/weather-maps.json"
 CONF_REGION = "region"
 DEFAULT_REGION = "kauno"
 
-# Representative county locations (not precise county centroid locations).
+# Representative county forecasts sampled at the county capital city center.
+# These Open-Meteo points also drive the city temperature labels.
 # Tuples are latitude, longitude.
 COUNTIES = {
-    "alytaus": ("Alytaus apskritis", 54.42, 24.05),
-    "kauno": ("Kauno apskritis", 54.93, 23.90),
-    "klaipedos": ("Klaipėdos apskritis", 55.74, 21.60),
-    "marijampoles": ("Marijampolės apskritis", 54.55, 23.50),
-    "panevezio": ("Panevėžio apskritis", 55.75, 24.36),
-    "siauliu": ("Šiaulių apskritis", 55.97, 23.31),
-    "taurages": ("Tauragės apskritis", 55.30, 22.28),
-    "telsiu": ("Telšių apskritis", 56.02, 22.25),
-    "utenos": ("Utenos apskritis", 55.49, 25.60),
-    "vilniaus": ("Vilniaus apskritis", 54.80, 25.30),
+    "alytaus": ("Alytaus apskritis", 54.3960, 24.0410),
+    "kauno": ("Kauno apskritis", 54.8985, 23.9036),
+    "klaipedos": ("Klaipėdos apskritis", 55.7033, 21.1443),
+    "marijampoles": ("Marijampolės apskritis", 54.5590, 23.3541),
+    "panevezio": ("Panevėžio apskritis", 55.7348, 24.3575),
+    "siauliu": ("Šiaulių apskritis", 55.9349, 23.3137),
+    "taurages": ("Tauragės apskritis", 55.2522, 22.2897),
+    "telsiu": ("Telšių apskritis", 55.9861, 22.2492),
+    "utenos": ("Utenos apskritis", 55.4976, 25.5992),
+    "vilniaus": ("Vilniaus apskritis", 54.6872, 25.2797),
 }
 
 COLOR_STATES = {

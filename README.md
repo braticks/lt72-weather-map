@@ -15,7 +15,7 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
 - **📍 Mano vieta** – rodo būtent dashboardą atidariusio telefono / planšetės / kompiuterio vietą. Vietos nustatymo prašoma tik paspaudus mygtuką; pakartotinai atidarius ir turint iš anksto suteiktą leidimą, ji gali būti įjungiama automatiškai. Vietos koordinatės naudojamos tik naršyklėje, nesiunčiamos į Home Assistant serverį. **Reikalinga HTTPS prieiga** arba kita naršyklės laikoma saugia aplinka; vietinis HTTP IP adresas paprastai neveiks.
 
-**Versija:** [v0.5.2](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.2) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.3](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.3) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -33,7 +33,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.2`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.3`.
 
 ## Saugumas ir informacija
 
@@ -134,4 +134,19 @@ wind_particles: high
 wind_visibility: vivid  # normal | strong | vivid
 show_satellite_info: false
 show_sources: false
+```
+
+### v0.5.3 – pagrindinių miestų temperatūros
+
+- Žemėlapyje rodomi **Vilnius, Kaunas, Klaipėda, Šiauliai ir Panevėžys** su temperatūra `°C` (numatytasis režimas).
+- Kortos UI galima pasirinkti **visus 10 apskričių centrų** arba išjungti temperatūras. Kartojami miesto ir apskrities pavadinimai automatiškai pašalinami, jei rodoma to paties miesto temperatūra.
+- Šaltinis: **Open-Meteo current.temperature_2m** (modelio dabartinė reikšmė, ne oficialus meteorologinės stoties matavimas). Duomenys atnaujinami kartu su prognoze kas ~10 minučių. Tikslesniems miestų duomenims integracija naudoja miestų centrų koordinates, o ne ankstesnius apskrities apytikslius taškus.
+- Jei temperatūra nepasiekiama, miestas neturi klaidinančio `0°` užrašo.
+- **Miestų temperatūros rodomos visuose sluoksniuose**, įskaitant radarą, vėją ir palydovą.
+
+```yaml
+type: custom:lt72-weather-map
+layer: radar
+show_city_temperatures: true
+city_temperature_set: main   # main | all
 ```

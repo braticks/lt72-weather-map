@@ -3,18 +3,29 @@
  * Weather: RainViewer radar observations, Open-Meteo model predictions.
  */
 const WMAP_REGIONS = [
-  ["alytaus","Alytaus","Alytus",24.05,54.42],
-  ["kauno","Kauno","Kaunas",23.90,54.93],
-  ["klaipedos","Klaipėdos","Klaipėda",21.60,55.74],
-  ["marijampoles","Marijampolės","Marijampolė",23.50,54.55],
-  ["panevezio","Panevėžio","Panevėžys",24.36,55.75],
-  ["siauliu","Šiaulių","Šiauliai",23.31,55.97],
-  ["taurages","Tauragės","Tauragė",22.28,55.30],
-  ["telsiu","Telšių","Telšiai",22.25,56.02],
-  ["utenos","Utenos","Utena",25.60,55.49],
-  ["vilniaus","Vilniaus","Vilnius",25.30,54.80]
+  ["alytaus","Alytaus","Alytus",24.0410,54.3960],
+  ["kauno","Kauno","Kaunas",23.9036,54.8985],
+  ["klaipedos","Klaipėdos","Klaipėda",21.1443,55.7033],
+  ["marijampoles","Marijampolės","Marijampolė",23.3541,54.5590],
+  ["panevezio","Panevėžio","Panevėžys",24.3575,55.7348],
+  ["siauliu","Šiaulių","Šiauliai",23.3137,55.9349],
+  ["taurages","Tauragės","Tauragė",22.2897,55.2522],
+  ["telsiu","Telšių","Telšiai",22.2492,55.9861],
+  ["utenos","Utenos","Utena",25.5992,55.4976],
+  ["vilniaus","Vilniaus","Vilnius",25.2797,54.6872]
 ];
 const WMAP_BY_KEY=Object.fromEntries(WMAP_REGIONS.map(r=>[r[0],r]));
+// Default is only five largest cities, avoiding visual clutter on phones.
+const WMAP_MAIN_CITIES=["vilniaus","kauno","klaipedos","siauliu","panevezio"];
+const WMAP_CITY_SETS=[
+ ["main","5 pagrindiniai miestai"],
+ ["all","Visi 10 apskričių centrai"]
+];
+function wmapTemperatureLabel(value) {
+ if(typeof value!=="number"||!Number.isFinite(value))return null;
+ const rounded=Math.round(value);
+ return (rounded>0?"+":"")+rounded+"°";
+}
 const WMAP_LEVELS={
  red:["Raudona","#e53935"],
  yellow:["Geltona","#f9c74f"],
@@ -65,6 +76,7 @@ const WMAP_FLAGS=[
  ["show_icon","Rodyti ikoną"],
  ["show_subtitle","Rodyti šaltinių būseną"],
  ["show_region_labels","Rodyti apskričių pavadinimus"],
+ ["show_city_temperatures","Rodyti miestų temperatūras"],
  ["show_neighbor_borders","Rodyti kaimyninių šalių kontūrus"],
  ["show_neighbor_labels","Rodyti kaimyninių šalių pavadinimus"],
  ["show_alerts","Rodyti oro pavojaus spalvas"],
@@ -509,6 +521,13 @@ class LT72WeatherMapCard extends HTMLElement {
    const neighborBase=this._neighbors?
      '<g class="neighbor-land">'+this._neighbors.map(c=>
        '<path d="'+c.d+'" fill="var(--wmap-land)" stroke="none"></path>').join("")+'</g>' : "";
+   const cityMode=this._config.city_temperature_set==="all"?"all":"main";
+   const visibleCityKeys=new Set(cityMode==="all"?
+     WMAP_REGIONS.map(r=>r[0]):WMAP_MAIN_CITIES);
+   const cityTempKeys=weatherReady&&this._show("show_city_temperatures")
+     ?new Set([...visibleCityKeys].filter(key=>
+       wmapTemperatureLabel(weather[key]?.temperature_c)!==null))
+     :new Set();
    const countryLabels=this._config.show_neighbor_labels!==false&&this._neighbors?
      WMAP_COUNTRY_LABELS.map(([name,lon,lat])=>{
        const [x,y]=projection.xy(lon,lat);
@@ -525,7 +544,7 @@ class LT72WeatherMapCard extends HTMLElement {
      const select=s.key===region[0];
      const outline="var(--wmap-county)";
      const bgFill=alertShown?color:"#f4f6fa";
-     const text=this._show("show_region_labels")?
+     const text=this._show("show_region_labels")&&!cityTempKeys.has(s.key)?
        '<text x="'+s.x.toFixed(1)+'" y="'+(s.y-13).toFixed(1)+
        '" text-anchor="middle" class="county-label">'+WMAP_ESC(s.short)+'</text>':"";
      return '<g role="button" tabindex="0" data-region="'+s.key+
@@ -577,6 +596,18 @@ class LT72WeatherMapCard extends HTMLElement {
        '<title>⚡ Prognozuojama perkūnija – ne užfiksuotas žaibo smūgis</title></g>':"";
      return defs+flakes+bolt;
    }).join("") : "";
+   const cityTemperatures=this._regions&&cityTempKeys.size?
+     this._regions.filter(r=>cityTempKeys.has(r.key)).map(r=>{
+       const c=wmapTemperatureLabel(weather[r.key]?.temperature_c);
+       const tempValue=weather[r.key]?.temperature_c;
+       const tempColor=tempValue<=0?"cold":tempValue>=25?"hot":"neutral";
+       return '<g class="city-temperature '+tempColor+'" aria-label="'+
+         WMAP_ESC(r.short+' '+c)+'">'+
+         '<text class="city-label" x="'+r.x.toFixed(1)+'" y="'+(r.y-9).toFixed(1)+
+         '" text-anchor="middle">'+WMAP_ESC(r.short)+'</text>'+
+         '<text class="city-value" x="'+r.x.toFixed(1)+'" y="'+(r.y+7).toFixed(1)+
+         '" text-anchor="middle">'+WMAP_ESC(c)+'</text></g>';
+     }).join("") : "";
    const browserPoint=this._config.show_location!==false?
      wmapLocationMarker(this._devicePosition,projection):null;
    const locationOnMap=this._devicePosition&&!browserPoint;
@@ -686,6 +717,10 @@ class LT72WeatherMapCard extends HTMLElement {
      '@keyframes gpsPulse{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:.85;transform:scale(1.25)}}',
      '.map svg{width:100%;height:auto;display:block;max-height:470px}',
      '.county-label{font:600 13px Roboto,Arial,sans-serif;fill:var(--wmap-label);paint-order:stroke;stroke:var(--wmap-land);stroke-width:3px;stroke-linejoin:round;pointer-events:none}',
+     '.city-temperature{pointer-events:none;filter:drop-shadow(0 1px 1px #0005)}',
+     '.city-label{font:600 13px Roboto,Arial,sans-serif;fill:#fff;stroke:#1b2939;stroke-width:2.5px;paint-order:stroke;stroke-linejoin:round}',
+     '.city-value{font:700 17px Roboto,Arial,sans-serif;fill:#f7fafc;stroke:#172536;stroke-width:2.6px;paint-order:stroke;stroke-linejoin:round}',
+     '.city-temperature.cold .city-value{fill:#ccecff}.city-temperature.hot .city-value{fill:#ffddae}',
      '.weather-label{font:bold 12px Roboto,Arial,sans-serif;fill:#134e86;paint-order:stroke;stroke:#fff;stroke-width:3.5px;pointer-events:none}',
      '.snow-label{font:29px Arial,sans-serif;fill:#0ea5e9;paint-order:stroke;stroke:#fff;stroke-width:3px;pointer-events:none}',
      '.forecast-snowflake{font-family:Arial,sans-serif;fill:#e2f7ff;stroke:#2b86b8;stroke-width:.6px;paint-order:stroke;pointer-events:none;filter:drop-shadow(0 1px 1px #0f416688)}',
@@ -726,7 +761,7 @@ class LT72WeatherMapCard extends HTMLElement {
          '<rect x="0" y="0" width="760" height="444" fill="var(--wmap-sea)"></rect>'+
          neighborBase+satelliteImage+images+
          '<g class="neighbor-outlines">'+neighbors+'</g>'+
-         countryLabels+regionsHtml+weatherHtml+forecastSymbols+deviceMarker+'</svg>'+
+         countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+'</svg>'+
          (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':""),
      locationButton,
      (mapMissing?'<div class="overlay-alert">⚠ '+WMAP_ESC(mode==="radar"?
@@ -812,6 +847,11 @@ class LT72WeatherMapEditor extends HTMLElement {
      '<label class="field"><span>Pradinė apskritis</span><select data-select="region">',
      '<option value="">Pagal integracijos nustatymus</option>',
      ...WMAP_REGIONS.map(r=>'<option value="'+r[0]+'"'+(current.region===r[0]?' selected':'')+'>'+WMAP_ESC(r[1])+' apskritis</option>'),
+     '</select></label>',
+     '<label class="field"><span>Miestai su temperatūromis</span><select data-select="city_temperature_set">',
+     ...WMAP_CITY_SETS.map(([id,name])=>
+       '<option value="'+id+'"'+((current.city_temperature_set||"main")===id?' selected':'')+'>'+
+       WMAP_ESC(name)+'</option>'),
      '</select></label>',
      '<label class="field"><span>Pradinis sluoksnis</span><select data-select="layer">',
      ...WMAP_MODES.map(m=>'<option value="'+m[0]+'"'+((current.layer||"radar")===m[0]?' selected':'')+'>'+WMAP_ESC(m[1])+'</option>'),

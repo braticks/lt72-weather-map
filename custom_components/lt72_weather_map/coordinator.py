@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import logging
+import math
 import re
 from urllib.parse import urlparse
 
@@ -41,7 +42,16 @@ def parse_meteo(data: object) -> dict:
             isinstance(weather_code, (int, float))
             and not isinstance(weather_code, bool)
         ) else None
+        temperature = current.get("temperature_2m")
+        # Temperature is optional so one missing weather field does not hide
+        # valid wind, snow or rain. Missing temperature is never shown as 0°C.
+        temp_c = round(float(temperature), 1) if (
+            isinstance(temperature, (int, float))
+            and not isinstance(temperature, bool)
+            and math.isfinite(temperature)
+        ) else None
         parsed[county] = {
+            "temperature_c": temp_c,
             "weather_code": weather_code,
             "wind_kmh": round(float(current["wind_speed_10m"]), 1),
             "wind_from_deg": round(float(current["wind_direction_10m"]), 0),
@@ -120,7 +130,7 @@ class LT72WeatherCoordinator(DataUpdateCoordinator[dict]):
                     "latitude": ",".join(str(x[1]) for x in rows),
                     "longitude": ",".join(str(x[2]) for x in rows),
                     "current": "wind_speed_10m,wind_direction_10m,"
-                               "wind_gusts_10m,snowfall,precipitation,weather_code",
+                               "wind_gusts_10m,snowfall,precipitation,weather_code,temperature_2m",
                     "forecast_days": 1,
                     "wind_speed_unit": "kmh",
                     "timezone": "Europe/Vilnius",

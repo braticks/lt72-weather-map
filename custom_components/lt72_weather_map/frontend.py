@@ -15,7 +15,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 FRONTEND_URL = f"/{DOMAIN}"
 MODULE_URL = f"{FRONTEND_URL}/lt72-weather-map.js"
-MODULE_VERSION = "0.5.2"
+MODULE_VERSION = "0.5.3"
 ASSETS = Path(__file__).parent / "www"
 
 

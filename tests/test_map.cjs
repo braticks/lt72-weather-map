@@ -44,6 +44,12 @@ assert(slow.pixelsPerSecond < medium.pixelsPerSecond && medium.pixelsPerSecond <
 assert(slow.alpha < medium.alpha && medium.alpha < strong.alpha);
 assert(slow.trailLength < medium.trailLength && medium.trailLength < strong.trailLength);
 assert.equal(paths.length,10);
+assert.equal(vm.runInContext("wmapTemperatureLabel(8.6)",ctx),"+9°");
+assert.equal(vm.runInContext("wmapTemperatureLabel(-2.6)",ctx),"-3°");
+assert.equal(vm.runInContext("wmapTemperatureLabel(0)",ctx),"0°");
+assert.equal(vm.runInContext("wmapTemperatureLabel(null)",ctx),null);
+assert.equal(vm.runInContext("wmapTemperatureLabel(undefined)",ctx),null);
+assert.equal(vm.runInContext("WMAP_MAIN_CITIES.length",ctx),5);
 assert.equal(new Set(paths.map(x=>x.key)).size,10);
 assert(paths.every(x=>x.d.startsWith("M")&&!x.d.includes("NaN")));
 assert(paths.every(x=>Number.isFinite(x.x)&&x.x>=0&&x.x<=760));
@@ -117,7 +123,11 @@ const attributes={
   saltinis:"LT72 Weather Map",apskritis:"Kauno apskritis",
   alerts_available:true, weather_available:true,radar_available:true,
   apskritys:{kauno:{kodas:"red",paskelbta:"2026-10-18 08:00"}},
-  weather_samples:{kauno:{wind_kmh:20,wind_from_deg:90,gust_kmh:35,snow_cm:0.3,precip_mm:1,weather_code:95}},
+  weather_samples:{kauno:{wind_kmh:20,wind_from_deg:90,gust_kmh:35,snow_cm:0.3,precip_mm:1,weather_code:95,temperature_c:8.6},
+    vilniaus:{temperature_c:10},klaipedos:{temperature_c:6.2},
+    siauliu:{temperature_c:7},panevezio:{temperature_c:8},
+    alytaus:{temperature_c:8},marijampoles:{temperature_c:9},
+    taurages:{temperature_c:7},telsiu:{temperature_c:5},utenos:{temperature_c:4}},
   radar:valid
 };
 card.setConfig({type:"custom:lt72-weather-map",region:"kauno",layer:"radar"});
@@ -261,3 +271,26 @@ assert.equal(editor.event.detail.config.show_sources,false);
 editor._change("wind_visibility","vivid");
 assert.equal(editor.event.detail.config.wind_visibility,"vivid");
 console.log("50m neighbor borders, optional footers, source disclosure, visible wind settings passed.");
+
+card.setConfig({type:"custom:lt72-weather-map",layer:"radar"});
+const fiveCityHtml=card.shadowRoot.innerHTML;
+assert.equal((fiveCityHtml.match(/class="city-temperature /g)||[]).length,5);
+assert(fiveCityHtml.includes("Kaunas"));
+assert(fiveCityHtml.includes("+9°"));
+assert(fiveCityHtml.includes('class="city-value"'));
+assert(!fiveCityHtml.includes('aria-label="Alytus +8°"'));
+card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",city_temperature_set:"all"});
+const tenCitiesHtml=card.shadowRoot.innerHTML;
+assert.equal((tenCitiesHtml.match(/class="city-temperature /g)||[]).length,10);
+assert(tenCitiesHtml.includes('aria-label="Alytus +8°"'));
+card.setConfig({type:"custom:lt72-weather-map",layer:"radar",show_city_temperatures:false});
+const noCitiesHtml=card.shadowRoot.innerHTML;
+assert(!noCitiesHtml.includes('class="city-temperature '));
+assert(noCitiesHtml.includes('class="county-label"'));
+assert(editor.shadowRoot.innerHTML.includes('data-setting="show_city_temperatures"'));
+assert(editor.shadowRoot.innerHTML.includes('data-select="city_temperature_set"'));
+editor._change("show_city_temperatures",false);
+assert.equal(editor.event.detail.config.show_city_temperatures,false);
+editor._change("city_temperature_set","all");
+assert.equal(editor.event.detail.config.city_temperature_set,"all");
+console.log("Main city temperatures, all-county mode, hide toggle and no false zero verified.");

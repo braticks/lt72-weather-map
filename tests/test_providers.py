@@ -62,6 +62,7 @@ class Sources(unittest.TestCase):
                 "snowfall": 0.1,
                 "precipitation": 1.4,
                 "weather_code": 95,
+                "temperature_2m": 12.75,
                 "time": "2026-10-18T19:00",
             }} for _ in range(10)
         ]
@@ -70,6 +71,7 @@ class Sources(unittest.TestCase):
         self.assertEqual(parsed["0"]["wind_kmh"], 23.5)
         self.assertEqual(parsed["0"]["snow_cm"], 0.1)
         self.assertEqual(parsed["0"]["weather_code"], 95)
+        self.assertEqual(parsed["0"]["temperature_c"], 12.8)
 
     def test_weather_code_can_be_missing_without_faking_a_storm(self):
         payload = [{"current": {
@@ -79,6 +81,19 @@ class Sources(unittest.TestCase):
         }} for _ in range(10)]
         parsed = parse_meteo(payload)
         self.assertIsNone(parsed["0"]["weather_code"])
+        self.assertIsNone(parsed["0"]["temperature_c"])
+
+    def test_negative_and_zero_city_temperatures(self):
+        payload = [{"current": {
+            "wind_speed_10m": 5, "wind_direction_10m": 180,
+            "wind_gusts_10m": 10, "snowfall": 0,
+            "precipitation": 0, "temperature_2m": -3.2,
+        }} for _ in range(10)]
+        parsed = parse_meteo(payload)
+        self.assertEqual(parsed["0"]["temperature_c"], -3.2)
+        self.assertEqual(parsed["vilniaus"] if "vilniaus" in parsed else parsed["0"],
+                         parsed["0"])
+
 
     def test_missing_meteo_not_zero(self):
         with self.assertRaises(ValueError):

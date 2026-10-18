@@ -23,6 +23,56 @@ _LOGGER = logging.getLogger(__name__)
 RADAR_PATH = re.compile(r"^/v2/radar/(?:[0-9]{9,12}|[0-9a-f]{12})$")
 
 
+def wind_15m_model_average(record: dict) -> tuple[float, float, str] | None:
+    """Estimate last 15 min model wind from two instantaneous quarter-hour points.
+
+    This is NOT a measured 15-minute wind mean. Exclude future/stale/missing
+    points and weight circular meteorological direction by speed.
+    """
+    current = record.get("current") if isinstance(record, dict) else None
+    minute = record.get("minutely_15") if isinstance(record, dict) else None
+    if not isinstance(current, dict) or not isinstance(minute, dict):
+        return None
+    times = minute.get("time")
+    speeds = minute.get("wind_speed_10m")
+    directions = minute.get("wind_direction_10m")
+    if not all(isinstance(v, list) for v in (times, speeds, directions)):
+        return None
+    if not (len(times) == len(speeds) == len(directions)) or len(times) < 2:
+        return None
+    try:
+        current_at = datetime.fromisoformat(current["time"])
+    except (TypeError, ValueError, KeyError):
+        return None
+    rows = []
+    for t, s, d in zip(times, speeds, directions):
+        if (not isinstance(t, str)
+                or not isinstance(s, (int, float)) or isinstance(s, bool)
+                or not isinstance(d, (int, float)) or isinstance(d, bool)
+                or not math.isfinite(s) or s < 0 or not math.isfinite(d)):
+            continue
+        try:
+            at = datetime.fromisoformat(t)
+            if at <= current_at:
+                rows.append((at, float(s), float(d)))
+        except (TypeError, ValueError):
+            continue
+    rows.sort(key=lambda r: r[0])
+    if len(rows) < 2:
+        return None
+    before, after = rows[-2:]
+    step = (after[0]-before[0]).total_seconds()
+    age = (current_at-after[0]).total_seconds()
+    if not (840 <= step <= 960 and 0 <= age <= 1200):
+        return None
+    avg_speed = (before[1]+after[1])/2
+    xx = sum(math.sin(math.radians(row[2]))*row[1] for row in (before,after))
+    yy = sum(math.cos(math.radians(row[2]))*row[1] for row in (before,after))
+    avg_direction = ((math.degrees(math.atan2(xx,yy))+360)%360
+                     if abs(xx)+abs(yy)>1e-8 else after[2]%360)
+    return round(avg_speed,1),round(avg_direction,0),after[0].isoformat()
+
+
 def parse_meteo(data: object) -> dict:
     """Parse forecast samples at county capitals and additional cities."""
     if not isinstance(data, list) or len(data) != len(METEO_POINTS):
@@ -50,11 +100,15 @@ def parse_meteo(data: object) -> dict:
             and not isinstance(temperature, bool)
             and math.isfinite(temperature)
         ) else None
+        avg = wind_15m_model_average(record)
         parsed[county] = {
             "temperature_c": temp_c,
             "weather_code": weather_code,
-            "wind_kmh": round(float(current["wind_speed_10m"]), 1),
-            "wind_from_deg": round(float(current["wind_direction_10m"]), 0),
+            "wind_kmh": avg[0] if avg is not None else round(float(current["wind_speed_10m"]), 1),
+            "wind_from_deg": avg[1] if avg is not None else round(float(current["wind_direction_10m"]), 0),
+            "wind_now_kmh": round(float(current["wind_speed_10m"]), 1),
+            "wind_window": "15m" if avg is not None else "current",
+            "wind_window_at": avg[2] if avg is not None else current.get("time"),
             "gust_kmh": round(float(current["wind_gusts_10m"]), 1),
             "snow_cm": round(float(current["snowfall"]), 2),
             "precip_mm": round(float(current["precipitation"]), 1),
@@ -132,6 +186,9 @@ class LT72WeatherCoordinator(DataUpdateCoordinator[dict]):
                     "current": "wind_speed_10m,wind_direction_10m,"
                                "wind_gusts_10m,snowfall,precipitation,weather_code,temperature_2m",
                     "forecast_days": 1,
+                    "minutely_15": "wind_speed_10m,wind_direction_10m",
+                    "past_minutely_15": 3,
+                    "forecast_minutely_15": 1,
                     "wind_speed_unit": "kmh",
                     "timezone": "Europe/Vilnius",
                 }

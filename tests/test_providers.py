@@ -1,6 +1,7 @@
 """Validate weather-provider payload decoders without importing Home Assistant."""
 
 import ast
+from datetime import datetime
 from pathlib import Path
 import math
 import re
@@ -15,11 +16,12 @@ module = ast.parse(SOURCE.read_text(encoding="utf-8"))
 functions = [
     node for node in module.body
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    and node.name in {"parse_meteo", "parse_radar"}
+    and node.name in {"parse_meteo", "parse_radar", "wind_15m_model_average"}
 ]
 scope = {
     "re": re,
     "math": math,
+    "datetime": datetime,
     "urlparse": urlparse,
     "RADAR_PATH": re.compile(r"^/v2/radar/(?:[0-9]{9,12}|[0-9a-f]{12})$"),
     "METEO_POINTS": {
@@ -30,6 +32,7 @@ scope = {
 exec(compile(ast.Module(body=functions, type_ignores=[]), str(SOURCE), "exec"), scope)
 parse_radar = scope["parse_radar"]
 parse_meteo = scope["parse_meteo"]
+wind_15m_model_average = scope["wind_15m_model_average"]
 
 
 class Sources(unittest.TestCase):
@@ -124,3 +127,46 @@ class BirzaiLocationTests(unittest.TestCase):
         const_file = SOURCE.with_name("const.py").read_text(encoding="utf-8")
         self.assertIn('"birzai": ("Biržai", 56.2045, 24.7567)', const_file)
         self.assertIn("METEO_POINTS = {**COUNTIES, **EXTRA_CITIES}", const_file)
+
+
+class FifteenMinuteWindTests(unittest.TestCase):
+    def sample(self):
+        return {"current": {"time": "2026-10-18T21:44",
+                            "wind_speed_10m": 25, "wind_direction_10m": 180},
+                "minutely_15": {
+                    "time": ["2026-10-18T21:15", "2026-10-18T21:30", "2026-10-18T21:45"],
+                    "wind_speed_10m": [8, 12, 40],
+                    "wind_direction_10m": [350, 10, 90]}}
+
+    def test_average_ignores_future_and_handles_north(self):
+        speed, direction, stamped = wind_15m_model_average(self.sample())
+        self.assertEqual(speed, 10)
+        self.assertLess(min(direction,360-direction), 13)
+        self.assertEqual(stamped, "2026-10-18T21:30")
+
+    def test_current_fallback_without_false_15m_label(self):
+        item = self.sample()
+        row = {**item["current"], "wind_gusts_10m": 30,
+               "snowfall": 0, "precipitation": 0}
+        result = parse_meteo([{"current": row} for _ in range(11)])
+        self.assertEqual(result["birzai"]["wind_window"], "current")
+        self.assertEqual(result["birzai"]["wind_kmh"], 25)
+
+    def test_all_cities_use_model_average_when_available(self):
+        item = self.sample()
+        row = {**item["current"], "wind_gusts_10m": 30,
+               "snowfall": 0, "precipitation": 0}
+        result = parse_meteo([{"current": row, "minutely_15": item["minutely_15"]}
+                              for _ in range(11)])
+        self.assertEqual(result["birzai"]["wind_window"], "15m")
+        self.assertEqual(result["birzai"]["wind_kmh"], 10)
+        self.assertEqual(result["birzai"]["wind_now_kmh"], 25)
+
+    def test_missing_and_stale_fall_back(self):
+        item = self.sample()
+        item["minutely_15"]["wind_speed_10m"][1] = None
+        self.assertIsNone(wind_15m_model_average(item))
+        item = self.sample()
+        item["minutely_15"]["time"] = [
+            "2026-10-18T20:00","2026-10-18T20:15","2026-10-18T21:45"]
+        self.assertIsNone(wind_15m_model_average(item))

@@ -8,13 +8,14 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 
 - Tikros visų 10 Lietuvos apskričių ribos, spustelėjama apskritis.
 - Oro pavojus: raudona / geltona / geltona po raudonos / balta; be įrašo kortoje balta su punktyrine riba (ne oficialus atšaukimas).
-- **Radaras** – RainViewer stebėti krituliai (iki 2 val. istorija, ne prognozė).
+- **Radaras** – RainViewer stebėti krituliai (iki 2 val. istorija, ne prognozė). Radaro vaizdas naudoja **Universal Blue (2)** spalvų paletę ir parametrą `1_1`, leidžiantį atskirai spalvinti tikėtiną sniegą. Kortelėje yra atskiras spalvų paaiškinimas, kurį galima išjungti.
 - **Vėjas** – animuotos vėjo dalelės ir Open-Meteo prognozuojamas greitis, kryptis bei gūsiai. Dalelės juda pagal apytikslę 10 apskričių vėjo duomenų interpoliaciją (ne „Windy“ detalumo modelis).
-- **Sniegas** – Open-Meteo prognozuojamas snygis.
+- **Sniegas** – Open-Meteo prognozuojamas snygis. Sniego prognozė pagal apskritis nėra tas pats, kas radaro sniego spalvinimas.
+- **Palydovas** – [EUMETSAT EUMETView](https://view.eumetsat.int/) „Meteosat GeoColour RGB“ WMS vaizdas tame pačiame geografiniame žemėlapyje (dieną debesų spalvos, naktį infraraudonųjų spindulių informacija), su atskiru debesų sluoksnio mygtuku. **Palydovo vaizdo realų atvaizdavimą reikia patikrinti naudojamoje HA naršyklėje:** viešasis WMS gali vėluoti ar riboti užklausas; nutrūkus ryšiui korta parodo įspėjimą.
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
 - **📍 Mano vieta** – rodo būtent dashboardą atidariusio telefono / planšetės / kompiuterio vietą. Vietos nustatymo prašoma tik paspaudus mygtuką; pakartotinai atidarius ir turint iš anksto suteiktą leidimą, ji gali būti įjungiama automatiškai. Vietos koordinatės naudojamos tik naršyklėje, nesiunčiamos į Home Assistant serverį. **Reikalinga HTTPS prieiga** arba kita naršyklės laikoma saugia aplinka; vietinis HTTP IP adresas paprastai neveiks.
 
-**Versija:** [v0.2.1](https://github.com/braticks/lt72-weather-map/releases/tag/v0.2.1) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.3.0](https://github.com/braticks/lt72-weather-map/releases/tag/v0.3.0) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -32,7 +33,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.2.1`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.3.0`.
 
 ## Saugumas ir informacija
 
@@ -56,3 +57,14 @@ show_weather_labels: true
 ```
 
 Jei įrenginio vietos nustatymas nepavyksta, korta **nenaudoja serverio adreso** kaip pakaitalo. Vietos rodymą galima išjungti per kortos vizualinį redaktorių. Vietos aptikimui kompiuteryje reikia įjungtų sistemos vietos nustatymo paslaugų; telefonu dažniausiai tiksliau nustato GPS. Vietos žymeklis rodomas tik Lietuvos žemėlapio ribose.
+
+### Debesų sluoksnio pavyzdys
+
+```yaml
+type: custom:lt72-weather-map
+layer: satellite
+show_precip_legend: true
+show_alerts: true
+```
+
+„Palydovas“ rodo **debesų struktūrą**, o ne tai, ar lyja/sninga. „Visi“ sluoksniuoja palydovo vaizdą po kritulių radaru ir LT72 apskritimis. Debesys pateikiami naudojant EUMETSAT `mtg_fd:rgb_geocolour` WMS sluoksnį (© EUMETSAT / NASA), o ne RainViewer IR produktą, kuris nutrauktas 2026 m. Palydovo vaizdai gaunami iš trečiosios šalies tiesiai per naršyklę, o ne per Home Assistant serverį.

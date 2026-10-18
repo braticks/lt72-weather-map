@@ -25,7 +25,7 @@ const WMAP_LEVELS={
 };
 const WMAP_MODES=[
  ["radar","🌧️ Radaras"],["wind","💨 Vėjas"],
- ["snow","❄️ Sniegas"],["all","🌦️ Visi"],["none","🗺️ Tik pavojus"]
+ ["snow","❄️ Sniegas"],["satellite","☁️ Palydovas"],["all","🌦️ Visi"],["none","🗺️ Tik pavojus"]
 ];
 const WMAP_FLAGS=[
  ["show_header","Rodyti antraštę"],
@@ -38,6 +38,7 @@ const WMAP_FLAGS=[
  ["show_legend","Rodyti spalvų legendą"],
  ["show_timeline","Rodyti radaro laiko valdymą"],
  ["show_disclaimer","Rodyti perspėjimo paaiškinimą"],
+ ["show_precip_legend","Rodyti radaro kritulių spalvų paaiškinimą"],
  ["show_toolbar","Rodyti sluoksnių perjungimą"],
  ["show_location","Rodyti „Mano vieta“ žymeklį"],
  ["animated_wind","Animuoti vėjo judėjimą"]
@@ -61,7 +62,14 @@ function wmapProjection(){
  const x0=left[0], x1=right[0], y0=right[1], y1=left[1];
  const scale=Math.min(716/(x1-x0),390/(y1-y0));
  const dx=(760-(x1-x0)*scale)/2,dy=(444-(y1-y0)*scale)/2;
+ const pixelsPerWorld=Math.pow(2,WMAP_ZOOM)*WMAP_TILE;
+ // WMS EPSG:3857 shares this exact Mercator geometry with the radar tiles.
+ const worldX=v=>(v/pixelsPerWorld-0.5)*40075016.68557849;
+ const worldY=v=>(0.5-v/pixelsPerWorld)*40075016.68557849;
+ const west=worldX(x0-dx/scale),east=worldX(x0+(760-dx)/scale);
+ const north=worldY(y0-dy/scale),south=worldY(y0+(444-dy)/scale);
  return {
+   bbox3857:[west,south,east,north],
    xy(lon,lat){
      const p=wmapWorld(lon,lat);
      return [dx+(p[0]-x0)*scale,dy+(p[1]-y0)*scale];
@@ -147,6 +155,18 @@ function wmapLocationMarker(coords, projection=wmapProjection()) {
  if(x<0||y<0||x>760||y>444)return null;
  return {x,y};
 }
+// EUMETView public WMS GeoColour combines visible satellite imagery by day
+// and infrared cloud depiction at night. Attribution: EUMETSAT & NASA.
+function wmapSatelliteUrl(proj=wmapProjection(),now=Date.now()) {
+ const params=new URLSearchParams({
+   SERVICE:"WMS",VERSION:"1.3.0",REQUEST:"GetMap",
+   LAYERS:"mtg_fd:rgb_geocolour",STYLES:"",
+   CRS:"EPSG:3857",BBOX:proj.bbox3857.map(v=>v.toFixed(1)).join(","),
+   WIDTH:"760",HEIGHT:"444",FORMAT:"image/png",TRANSPARENT:"true",
+   _t:String(Math.floor(now/600000)) // Refresh the WMS image roughly every 10 min.
+ });
+ return "https://view.eumetsat.int/geoserver/wms?"+params.toString();
+}
 function wmapRadarTiles(meta,frame,proj=wmapProjection()){
  const host=String(meta?.host||"");
  const path=String(frame?.path||"");
@@ -171,6 +191,7 @@ class LT72WeatherMapCard extends HTMLElement {
    this._windRaf=null;this._windParticles=[];this._windLastTime=0;
    this._devicePosition=null;this._geolocationError="";
    this._geolocationWatchId=null;this._checkedGeoPermission=false;
+   this._satelliteError=false;this._satelliteBucket=null;
  }
  static getStubConfig(){return {type:"custom:lt72-weather-map"};}
  static getConfigElement(){return document.createElement("lt72-weather-map-editor");}
@@ -338,11 +359,20 @@ class LT72WeatherMapCard extends HTMLElement {
    const alertCode=wmapState(activeAlerts,alert);
    const alertLevel=WMAP_LEVELS[alertCode];
    const mode=this._mode||"radar";
+   const showSatellite=mode==="satellite"||mode==="all";
    const showRadar=(mode==="radar"||mode==="all")&&radarReady;
    const showWind=(mode==="wind"||mode==="all")&&weatherReady;
    const showSnow=(mode==="snow"||mode==="all")&&weatherReady;
    const chosenFrame=frames[this._radarIndex]||null;
    const projection=wmapProjection();
+   const currentBucket=Math.floor(Date.now()/600000);
+   if(this._satelliteBucket!==currentBucket){
+     this._satelliteBucket=currentBucket;
+     this._satelliteError=false;
+   }
+   const satelliteImage=showSatellite&&!this._satelliteError?
+     '<image class="satellite-layer" href="'+WMAP_ESC(wmapSatelliteUrl(projection))+
+     '" x="0" y="0" width="760" height="444" preserveAspectRatio="none"></image>' : "";
    let images="";
    if(showRadar&&chosenFrame){
      images=wmapRadarTiles(radar,chosenFrame,projection).map(t=>
@@ -355,7 +385,7 @@ class LT72WeatherMapCard extends HTMLElement {
      const color=WMAP_LEVELS[code]?.[1]||WMAP_LEVELS.unavailable[1];
      // Colour active alert districts; other polygons are lightly filled above radar.
      const isActive=["red","yellow","yellow_after_red"].includes(code);
-     const opacity=showRadar?(isActive?0.63:0.08):1;
+     const opacity=(showRadar||showSatellite)?(isActive?0.63:0.08):1;
      const select=s.key===region[0];
      const outline=select?"#2677d6":"var(--secondary-text-color,#64748b)";
      const bgFill=this._show("show_alerts")?color:"#f4f6fa";
@@ -434,6 +464,16 @@ class LT72WeatherMapCard extends HTMLElement {
        '<strong>'+WMAP_ESC(region[1])+' apskritis</strong>'+
        '<span class="status">'+WMAP_ESC(alertLevel[0])+'</span></div>'+
        '<div class="note">'+WMAP_ESC(msg)+'</div>'+weatherInfo+'</div>':"";
+   const precipitationGuide=this._show("show_precip_legend")&&(mode==="radar"||mode==="all")?
+     '<div class="precip-guide"><strong>🌧️ Radaro krituliai:</strong>'+
+       '<span class="rain-gradient"></span><span>Silpnesni → stipresni</span>'+
+       '<span class="snow-chip">❄️</span><span>Žydra / balzgana – galimas sniegas</span>'+
+       '<small>RainViewer spalvos (2 / Universal Blue), atskirai spalvinamas sniegas. Sniego atpažinimas apytikslis.</small>'+
+     '</div>' : "";
+   const satelliteGuide=showSatellite?
+     '<div class="sat-guide">☁️ EUMETSAT Meteosat palydovas: debesys, dieną natūralios spalvos, naktį IR. '+ 
+       'Tai ne kritulių radaras.'+
+       (this._satelliteError?' ⚠ Palydovinis vaizdas nepasiekiamas.':'')+'</div>' : "";
    const legend=this._show("show_legend")?
      '<div class="legend">'+Object.entries(WMAP_LEVELS).filter(e=>e[0]!=="not_reported")
        .map(([,level])=>'<span><i style="background:'+level[1]+'"></i>'+
@@ -461,10 +501,11 @@ class LT72WeatherMapCard extends HTMLElement {
      ' · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>'+
      ((mode==="radar"||mode==="all")?
        ' · Weather data by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>':'')+
+     (showSatellite?' · Imagery © <a href="https://www.eumetsat.int/" target="_blank" rel="noopener noreferrer">EUMETSAT</a> / NASA':'')+
      '</div>';
    const explanatory=this._show("show_disclaimer")?
      '<div class="fineprint">Balta be pranešimo ≠ oficialus atšaukimas. '+
-     'Pilka = nepasiekiama. Radaras rodo stebėtus kritulius; vėjas ir sniegas – modelio prognozė. '+
+     'Pilka = nepasiekiama. Radaras rodo stebėtus kritulius, o palydovas – debesų dangą; vėjas ir apskričių sniegas – modelio prognozė. '+
      'Pavojaus metu vadovaukitės oficialiais LT-Alert pranešimais.</div>':"";
    const mapMissing=(mode==="radar"&&!radarReady)||
      ((mode==="wind"||mode==="snow")&&!weatherReady);
@@ -500,6 +541,12 @@ class LT72WeatherMapCard extends HTMLElement {
      '.legend span{font-size:10px;color:var(--secondary-text-color);display:flex;align-items:center;gap:4px}',
      '.legend i{display:inline-block;width:9px;height:9px;border:1px solid #94a3b8;border-radius:3px}',
      '.fineprint{font-size:10px;color:var(--secondary-text-color);line-height:1.4;margin-top:10px}',
+     '.precip-guide{display:flex;gap:6px 9px;flex-wrap:wrap;align-items:center;margin-top:9px;font-size:11px;color:var(--secondary-text-color)}',
+     '.precip-guide strong{color:var(--primary-text-color)}',
+     '.precip-guide small{flex-basis:100%;line-height:1.35;font-size:10px}',
+     '.rain-gradient{display:inline-block;width:78px;height:9px;border-radius:4px;border:1px solid #94a3b8;background:linear-gradient(90deg,#9fdfee,#00a3e0,#005588,#ffee00,#ff4400)}',
+     '.snow-chip{color:#0aa4cc;font-size:16px}',
+     '.sat-guide{margin-top:8px;font-size:11px;color:var(--secondary-text-color);line-height:1.35}',
      '.credits{display:flex;justify-content:flex-end;font-size:10px;gap:4px;color:var(--secondary-text-color);margin-top:8px;flex-wrap:wrap}.credits a{color:var(--secondary-text-color);text-decoration:underline}',
      '.compact{padding:8px}.compact .header{margin-bottom:5px}.compact .mode{font-size:11px;padding:5px}.compact .toolbar{margin-bottom:6px}',
      '@media(max-width:480px){.county-label{font-size:16px}.weather-label{font-size:16px}ha-card{padding:10px}.toolbar{gap:4px}.mode{padding:6px;font-size:11px}}',
@@ -510,16 +557,24 @@ class LT72WeatherMapCard extends HTMLElement {
      !this._regions?'<div class="missing">Įkeliamas Lietuvos žemėlapis...</div>':
        '<svg viewBox="0 0 760 444" aria-label="LT72 pavojaus ir orų žemėlapis" role="img">'+
          '<rect x="0" y="0" width="760" height="444" fill="var(--secondary-background-color,#e7eff4)"></rect>'+
-         images+regionsHtml+weatherHtml+deviceMarker+'</svg>'+
+         satelliteImage+images+regionsHtml+weatherHtml+deviceMarker+'</svg>'+
          (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':""),
      locationButton,
      (mapMissing?'<div class="overlay-alert">⚠ '+WMAP_ESC(mode==="radar"?
        "Radaro duomenys nepasiekiami":"Orų prognozės nepasiekiamos")+'</div>':""),
      '</div>',
      (locationNote?'<div class="geo-note">'+WMAP_ESC(locationNote)+'</div>':""),
-     timeline,details,legend,explanatory,attribution,
+     timeline,precipitationGuide,satelliteGuide,details,legend,explanatory,attribution,
      '</ha-card>'
    ].join("");
+   root.querySelectorAll(".satellite-layer").forEach(node=>{
+     node.addEventListener("error",()=>{
+       if(!this._satelliteError){
+         this._satelliteError=true;
+         this._render();
+       }
+     });
+   });
    root.querySelectorAll("[data-locate]").forEach(node=>{
      node.addEventListener("click",()=>this._locate());
    });

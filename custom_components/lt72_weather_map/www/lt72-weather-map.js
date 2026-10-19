@@ -20,6 +20,15 @@ const WMAP_EXTRA_CITY_POINTS=[
 ];
 // Five largest cities, plus Biržai; the alert county set stays unchanged.
 const WMAP_MAIN_CITIES=["vilniaus","kauno","klaipedos","siauliu","panevezio","birzai"];
+const WMAP_LOCATION_CITIES=[
+ ...WMAP_REGIONS.map(r=>[r[0],r[2],r[3],r[4]]),...WMAP_EXTRA_CITY_POINTS
+].sort((a,b)=>a[1].localeCompare(b[1],"lt"));
+const WMAP_LOCATION_MODES=[
+ ["auto","Automatiškai (GPS / HA namai)"],
+ ["browser","Tik naršyklės GPS (HTTPS)"],
+ ["home","Home Assistant namų vieta"],
+ ["city","Pasirinktas miestas"]
+];
 const WMAP_CITY_SETS=[
  ["main","5 pagrindiniai miestai + Biržai"],
  ["all","Visi 10 apskričių centrų + Biržai"]
@@ -355,6 +364,7 @@ class LT72WeatherMapCard extends HTMLElement {
    this._selected=null;this._mode=null;this._radarIndex=null;
    this._windRaf=null;this._windParticles=[];this._windLastTime=0;
    this._devicePosition=null;this._geolocationError="";
+   this._locationOverride=null;
    this._geolocationWatchId=null;this._checkedGeoPermission=false;
    this._satelliteError=false;this._satelliteBucket=null;
    this._hassSignature=null;this._windInViewport=true;
@@ -366,18 +376,29 @@ class LT72WeatherMapCard extends HTMLElement {
    if(!config||config.type!=="custom:lt72-weather-map")throw Error("Netinkamas LT72 Weather Map kortos tipas");
    const before=this._config.region;
    const previousLayer=this._config.layer;
+   const previousLocation=JSON.stringify([this._config.location_mode,this._config.location_city,this._config.show_location]);
    this._config={...config};
+   const changedLocation=previousLocation!==JSON.stringify([config.location_mode,config.location_city,config.show_location]);
+   if(changedLocation){
+     this._locationOverride=null;
+     this._stopLocationWatch();
+     this._checkedGeoPermission=false;
+     this._devicePosition=null;
+     this._geolocationError="";
+   }
    if(WMAP_BY_KEY[config.region])this._selected=config.region;
    else if(before!==config.region)this._selected=null;
    if(this._mode===null||previousLayer!==config.layer)this._mode=config.layer||"radar";
    if(!WMAP_MODES.some(m=>m[0]===this._mode))this._mode="radar";
    this._render();
+   if(changedLocation&&this.isConnected===true)this._checkExistingLocationPermission();
  }
  set hass(value){
    this._hass=value;
    const entity=this._entity(),a=entity?.attributes||{};
    // Ignore unrelated HA entity updates and the refreshed_at timestamp.
    const signature=JSON.stringify([
+     value?.config?.latitude,value?.config?.longitude,
      entity?.entity_id,entity?.state,a.apskritis,a.apskritys,
      a.alerts_available,a.weather_samples,a.weather_available,
      a.radar,a.radar_available,a.errors
@@ -419,20 +440,64 @@ class LT72WeatherMapCard extends HTMLElement {
      document.removeEventListener("visibilitychange",this._windPageListener);
      this._windPageListener=null;
    }
-   if(this._geolocationWatchId!==null && typeof navigator!=="undefined" && navigator.geolocation){
-     navigator.geolocation.clearWatch(this._geolocationWatchId);
-     this._geolocationWatchId=null;
-   }
+   this._stopLocationWatch();
    // Recheck after a card is detached and reattached to the dashboard.
    this._checkedGeoPermission=false;
  }
+ _stopLocationWatch(){
+   if(this._geolocationWatchId!==null&&typeof navigator!=="undefined"&&navigator.geolocation){
+     navigator.geolocation.clearWatch(this._geolocationWatchId);
+   }
+   this._geolocationWatchId=null;
+ }
+ _locationChoice(){
+   if(this._locationOverride)return this._locationOverride;
+   const mode=this._config.location_mode;
+   if(mode==="city")return "city:"+(this._config.location_city||"kauno");
+   return mode==="browser"||mode==="home"?mode:"auto";
+ }
+ _homeCoordinates(){
+   // HA-configured home coordinates, NOT the location inferred from a local IP.
+   const conf=this._hass?.config;
+   if(conf?.latitude==null||conf?.longitude==null)return null;
+   const latitude=Number(conf.latitude),longitude=Number(conf.longitude);
+   if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||
+      latitude < -90||latitude > 90||longitude < -180||longitude > 180)return null;
+   return {latitude,longitude};
+ }
+ _locationInfo(){
+   const choice=this._locationChoice();
+   if(choice.startsWith("city:")){
+     const city=WMAP_LOCATION_CITIES.find(c=>c[0]===choice.slice(5));
+     return city?{coords:{latitude:city[3],longitude:city[2]},label:city[1]+" (pasirinktas miestas)",source:"city"}:null;
+   }
+   if(choice==="browser"||(choice==="auto"&&
+     (typeof window==="undefined"||window.isSecureContext!==false)&&this._devicePosition)){
+     return this._devicePosition?
+       {coords:this._devicePosition,label:"Šio įrenginio GPS vieta",source:"browser"}:null;
+   }
+   const home=choice==="home"||choice==="auto"?this._homeCoordinates():null;
+   return home?{coords:home,label:"Home Assistant namų vieta (ne GPS)",source:"home"}:null;
+ }
+ _selectLocation(choice){
+   this._stopLocationWatch();
+   this._checkedGeoPermission=false;
+   this._geolocationError="";
+   this._locationOverride=choice;
+   this._render();
+   if(choice==="browser"||choice==="auto")this._checkExistingLocationPermission();
+ }
  async _checkExistingLocationPermission(){
-   if(this._checkedGeoPermission||this._config.show_location===false)return;
+   if(this._checkedGeoPermission||this._config.show_location===false||
+      !["auto","browser"].includes(this._locationChoice()))return;
    this._checkedGeoPermission=true;
    if(typeof navigator==="undefined"||!navigator.geolocation)return;
    if(typeof window!=="undefined"&&window.isSecureContext===false){
-     this._geolocationError="Vietai nustatyti būtinas HTTPS adresas.";
-     this._render();return;
+     if(this._locationChoice()==="browser"){
+       this._geolocationError="Naršyklės GPS reikalingas HTTPS adresas.";
+       this._render();
+     }
+     return;
    }
    // Automatically request the browser's location; browser consent is required.
    if(!navigator.permissions?.query){
@@ -464,6 +529,8 @@ class LT72WeatherMapCard extends HTMLElement {
        pos=>{
          const {latitude,longitude,accuracy}=pos.coords;
          if(!Number.isFinite(latitude)||!Number.isFinite(longitude))return;
+         if(this._config.show_location===false||
+            !["auto","browser"].includes(this._locationChoice()))return;
          this._devicePosition={latitude,longitude,accuracy};
          this._geolocationError="";
          this._render();

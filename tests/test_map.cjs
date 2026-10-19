@@ -400,6 +400,41 @@ async function testAutomaticBrowserLocation(){
   assert(insecure.shadowRoot.innerHTML.includes("HTTPS adresas"));
   assert.equal(requests,1,"Insecure HTTP must not start geolocation");
   insecure.disconnectedCallback();
+  const home=vm.runInContext("new LT72WeatherMapCard()",ctx);
+  home._regions=paths;
+  home.setConfig({type:"custom:lt72-weather-map",location_mode:"home"});
+  home.hass={config:{latitude:54.8985,longitude:23.9036},states:{}};
+  assert(home.shadowRoot.innerHTML.includes("Home Assistant namų vieta (ne GPS)"));
+  assert(home.shadowRoot.innerHTML.includes('class="device-location"'));
+  assert(home.shadowRoot.innerHTML.includes('data-location-choice'));
+  assert(home.shadowRoot.innerHTML.includes('fill="#059669"'));
+
+  home.setConfig({type:"custom:lt72-weather-map",location_mode:"auto"});
+  home.connectedCallback();
+  assert(home.shadowRoot.innerHTML.includes("Rodoma HA namų vieta"));
+  assert(home.shadowRoot.innerHTML.includes('class="device-location"'));
+  home.disconnectedCallback();
+
+  home.setConfig({type:"custom:lt72-weather-map",location_mode:"city",location_city:"birzai"});
+  assert(home.shadowRoot.innerHTML.includes("Biržai (pasirinktas miestas)"));
+  assert(home.shadowRoot.innerHTML.includes('value="city:birzai" selected'));
+  assert(home.shadowRoot.innerHTML.includes('fill="#ea580c"'));
+  home._selectLocation("city:vilniaus");
+  assert(home.shadowRoot.innerHTML.includes("Vilnius (pasirinktas miestas)"));
+  assert(home._locationOverride==="city:vilniaus");
+  assert.equal(home._config.location_city,"birzai","Quick map menu must not overwrite saved defaults");
+
+  home.setConfig({type:"custom:lt72-weather-map",location_mode:"home",show_location:false});
+  assert(!home.shadowRoot.innerHTML.includes('data-location-choice'));
+  assert(!home.shadowRoot.innerHTML.includes('class="device-location"'));
+  const editorHome=vm.runInContext("new LT72WeatherMapEditor()",ctx);
+  editorHome.setConfig({type:"custom:lt72-weather-map"});
+  assert(editorHome.shadowRoot.innerHTML.includes('data-select="location_mode"'));
+  assert(editorHome.shadowRoot.innerHTML.includes('data-select="location_city"'));
+  editorHome._change("location_mode","city");
+  editorHome._change("location_city","birzai");
+  assert.equal(editorHome.event.detail.config.location_city,"birzai");
+  console.log("Local HTTP fallback, HA home marker, permanent city settings and card picker passed.");
   console.log("Automatic browser geolocation, GPS map dot and HTTPS guard passed.");
 }
 testAutomaticBrowserLocation().catch(err=>{console.error(err);process.exitCode=1;});

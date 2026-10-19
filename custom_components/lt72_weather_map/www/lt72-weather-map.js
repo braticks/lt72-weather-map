@@ -800,21 +800,40 @@ class LT72WeatherMapCard extends HTMLElement {
          '<text class="city-value" x="'+r.x.toFixed(1)+'" y="'+(r.y+7).toFixed(1)+
          '" text-anchor="middle">'+WMAP_ESC(c)+'</text></g>';
      }).join("") : "";
-   const browserPoint=this._config.show_location!==false?
-     wmapLocationMarker(this._devicePosition,projection):null;
-   const locationOnMap=this._devicePosition&&!browserPoint;
-   const deviceMarker=browserPoint?
-     '<g class="device-location" role="img" aria-label="Mano vieta šiame įrenginyje">'+
-       '<circle cx="'+browserPoint.x.toFixed(1)+'" cy="'+browserPoint.y.toFixed(1)+
-       '" r="15" fill="rgba(37,99,235,.15)" stroke="#2563eb" stroke-width="1.5" class="gps-pulse"></circle>'+
-       '<circle cx="'+browserPoint.x.toFixed(1)+'" cy="'+browserPoint.y.toFixed(1)+
-       '" r="6" fill="#2563eb" stroke="#fff" stroke-width="2.5"></circle>'+
-       '<title>Šio įrenginio GPS vieta</title></g>':"";
-   const locationButton=this._config.show_location===false?"":'<button type="button" class="locate-button" data-locate="true"'+
-     ' title="Rodyti šio įrenginio vietą">📍 '+
-     (this._devicePosition?"Mano vieta ✓":"Mano vieta")+'</button>';
-   const locationNote=this._config.show_location===false?"":this._geolocationError ||
-     (locationOnMap?"Įrenginys už rodomo Lietuvos žemėlapio ribų.":"");
+   const locationChoice=this._locationChoice();
+   const locationInfo=this._config.show_location===false?null:this._locationInfo();
+   const locationPoint=locationInfo?wmapLocationMarker(locationInfo.coords,projection):null;
+   const locationOutside=!!locationInfo&&!locationPoint;
+   const locationColor=locationInfo?.source==="home"?"#059669":
+     locationInfo?.source==="city"?"#ea580c":"#2563eb";
+   const deviceMarker=locationPoint?
+     '<g class="device-location" role="img" aria-label="'+WMAP_ESC(locationInfo.label)+'">'+
+       '<circle cx="'+locationPoint.x.toFixed(1)+'" cy="'+locationPoint.y.toFixed(1)+
+       '" r="15" fill="'+locationColor+'" fill-opacity=".15" stroke="'+locationColor+
+       '" stroke-width="1.5"'+(locationInfo.source==="browser"?' class="gps-pulse"':"")+'></circle>'+
+       '<circle cx="'+locationPoint.x.toFixed(1)+'" cy="'+locationPoint.y.toFixed(1)+
+       '" r="6" fill="'+locationColor+'" stroke="#fff" stroke-width="2.5"></circle>'+
+       '<title>'+WMAP_ESC(locationInfo.label)+'</title></g>':"";
+   const locationPicker=this._config.show_location===false?"":'<label class="location-picker" title="Vietos pasirinkimas">'+
+     '📍 <select data-location-choice aria-label="Vieta žemėlapyje">'+
+     WMAP_LOCATION_MODES.filter(m=>m[0]!=="city").map(m=>
+       '<option value="'+m[0]+'"'+(locationChoice===m[0]?' selected':'')+'>'+WMAP_ESC(m[1])+'</option>').join("")+
+     WMAP_LOCATION_CITIES.map(c=>
+       '<option value="city:'+c[0]+'"'+(locationChoice==="city:"+c[0]?' selected':'')+'>'+WMAP_ESC(c[1])+'</option>').join("")+
+     '</select></label>';
+   const locationButton=this._config.show_location===false||
+     !["auto","browser"].includes(locationChoice)||
+     (typeof window!=="undefined"&&window.isSecureContext===false)?"":'<button type="button" class="locate-button" data-locate="true"'+
+     ' title="Pakartoti naršyklės GPS nustatymą">⌖ GPS</button>';
+   const locationNote=this._config.show_location===false?"":(
+     locationChoice==="auto"&&locationInfo?.source==="home"?
+       "Rodoma HA namų vieta (ne įrenginio GPS)."+(
+         typeof window!=="undefined"&&window.isSecureContext===false?" GPS reikalingas HTTPS.":""):
+     locationOutside?"Pasirinkta vieta už rodomo žemėlapio ribų.":
+     this._geolocationError||
+     (!locationInfo&&["auto","home"].includes(locationChoice)?
+       "HA namų koordinatės nenustatytos – pasirinkite miestą.":"")
+   );
    const animateWind=showWind&&this._config.animated_wind!==false;
    const buttons=WMAP_MODES.map(m=>
      '<button class="mode '+(mode===m[0]?'active':'')+'" data-mode="'+m[0]+

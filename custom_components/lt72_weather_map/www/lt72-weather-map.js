@@ -105,6 +105,7 @@ const WMAP_FLAGS=[
  ["show_thunderstorms","Rodyti prognozuojamą perkūniją ⚡"],
  ["show_toolbar","Rodyti sluoksnių perjungimą"],
  ["show_location","Rodyti „Mano vieta“ žymeklį"],
+ ["show_zoom","Rodyti žemėlapio priartinimo mygtukus"],
  ["animated_wind","Animuoti vėjo judėjimą"]
 ];
 const WMAP_URL="/lt72_weather_map/";
@@ -115,6 +116,11 @@ const WMAP_NORMAL=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u03
 const WMAP_KEY=s=>WMAP_REGIONS.find(r=>WMAP_NORMAL(s).startsWith(WMAP_NORMAL(r[1])))?.[0];
 
 const WMAP_ZOOM=6, WMAP_TILE=256;
+const WMAP_MAP_ZOOM_STEPS=[1,1.5,2,2.5,3,4];
+function wmapClampMapZoom(value){
+ const z=Number(value);
+ return Number.isFinite(z)?Math.max(1,Math.min(4,z)):1;
+}
 function wmapWorld(lon,lat,z=WMAP_ZOOM){
  const sin=Math.sin(lat*Math.PI/180);
  return [(lon+180)/360*Math.pow(2,z)*WMAP_TILE,
@@ -365,6 +371,8 @@ class LT72WeatherMapCard extends HTMLElement {
    this._windRaf=null;this._windParticles=[];this._windLastTime=0;
    this._devicePosition=null;this._geolocationError="";
    this._locationOverride=null;
+   this._mapZoom=1;this._mapCenter={x:380,y:222};this._mapDrag=null;
+   this._suppressMapClick=false;
    this._geolocationWatchId=null;this._checkedGeoPermission=false;
    this._satelliteError=false;this._satelliteBucket=null;
    this._hassSignature=null;this._windInViewport=true;
@@ -376,6 +384,7 @@ class LT72WeatherMapCard extends HTMLElement {
    if(!config||config.type!=="custom:lt72-weather-map")throw Error("Netinkamas LT72 Weather Map kortos tipas");
    const before=this._config.region;
    const previousLayer=this._config.layer;
+   const previousZoom=this._config.default_zoom,previousShowZoom=this._config.show_zoom;
    const previousLocation=JSON.stringify([this._config.location_mode,this._config.location_city,this._config.show_location]);
    this._config={...config};
    const changedLocation=previousLocation!==JSON.stringify([config.location_mode,config.location_city,config.show_location]);
@@ -390,6 +399,9 @@ class LT72WeatherMapCard extends HTMLElement {
    else if(before!==config.region)this._selected=null;
    if(this._mode===null||previousLayer!==config.layer)this._mode=config.layer||"radar";
    if(!WMAP_MODES.some(m=>m[0]===this._mode))this._mode="radar";
+   if(config.show_zoom===false)this._setMapZoom(1,380,222);
+   else if(previousZoom!==config.default_zoom||previousShowZoom===false)
+     this._setMapZoom(config.default_zoom??1,380,222);
    this._render();
    if(changedLocation&&this.isConnected===true)this._checkExistingLocationPermission();
  }
@@ -441,8 +453,112 @@ class LT72WeatherMapCard extends HTMLElement {
      this._windPageListener=null;
    }
    this._stopLocationWatch();
+   this._mapDrag=null;
    // Recheck after a card is detached and reattached to the dashboard.
    this._checkedGeoPermission=false;
+ }
+ _mapZoomStyle(){
+   const z=this._mapZoom;
+   const tx=(380-z*this._mapCenter.x)/760*100;
+   const ty=(222-z*this._mapCenter.y)/444*100;
+   return "translate("+tx.toFixed(5)+"%,"+ty.toFixed(5)+"%) scale("+z+")";
+ }
+ _refreshMapZoom(){
+   const root=this.shadowRoot;
+   const scene=root?.querySelector?.(".map-scene");
+   if(scene)scene.style.transform=this._mapZoomStyle();
+   const viewport=root?.querySelector?.(".map-viewport");
+   viewport?.classList?.toggle("zoomed",this._mapZoom>1);
+   const zoomIn=root?.querySelector?.('[data-map-zoom="in"]');
+   const zoomOut=root?.querySelector?.('[data-map-zoom="out"]');
+   const reset=root?.querySelector?.('[data-map-zoom="reset"]');
+   if(zoomIn)zoomIn.disabled=this._mapZoom>=4;
+   if(zoomOut)zoomOut.disabled=this._mapZoom<=1;
+   if(reset){
+     reset.disabled=this._mapZoom<=1;
+     reset.textContent=this._mapZoom+"×";
+   }
+ }
+ _setMapZoom(value,x=this._mapCenter.x,y=this._mapCenter.y){
+   const z=wmapClampMapZoom(value);
+   this._mapZoom=z;
+   this._mapCenter={
+     x:Math.min(760-380/z,Math.max(380/z,Number.isFinite(x)?x:380)),
+     y:Math.min(444-222/z,Math.max(222/z,Number.isFinite(y)?y:222))
+   };
+   this._refreshMapZoom();
+ }
+ _changeMapZoom(direction){
+   if(this._config.show_zoom===false)return;
+   const steps=WMAP_MAP_ZOOM_STEPS;
+   const next=direction>0?steps.find(z=>z>this._mapZoom+0.0001):
+     [...steps].reverse().find(z=>z<this._mapZoom-0.0001);
+   if(next===undefined)return;
+   let {x,y}=this._mapCenter;
+   // The first zoom-in focuses on the visible GPS/home/city marker.
+   if(this._mapZoom===1&&direction>0&&this._config.show_location!==false){
+     const point=wmapLocationMarker(this._locationInfo()?.coords);
+     if(point){x=point.x;y=point.y;}
+   }
+   this._setMapZoom(next,x,y);
+ }
+ _attachMapNavigation(){
+   if(this._config.show_zoom===false)return;
+   const root=this.shadowRoot;
+   root.querySelectorAll("[data-map-zoom]").forEach(button=>{
+     button.addEventListener("click",()=>{
+       const action=button.getAttribute("data-map-zoom");
+       if(action==="reset")this._setMapZoom(1,380,222);
+       else this._changeMapZoom(action==="in"?1:-1);
+     });
+   });
+   const viewport=root.querySelector?.(".map-viewport");
+   if(!viewport)return;
+   viewport.addEventListener("pointerdown",event=>{
+     if(this._mapZoom<=1||event.button!==0||this._mapDrag)return;
+     const rect=viewport.getBoundingClientRect();
+     if(!rect.width||!rect.height)return;
+     this._mapDrag={id:event.pointerId,px:event.clientX,py:event.clientY,
+       x:this._mapCenter.x,y:this._mapCenter.y,w:rect.width,h:rect.height,moved:false};
+     viewport.setPointerCapture?.(event.pointerId);
+   });
+   viewport.addEventListener("pointermove",event=>{
+     const drag=this._mapDrag;
+     if(!drag||event.pointerId!==drag.id)return;
+     const dx=event.clientX-drag.px,dy=event.clientY-drag.py;
+     if(Math.abs(dx)+Math.abs(dy)>4)drag.moved=true;
+     if(!drag.moved)return;
+     event.preventDefault();
+     this._setMapZoom(this._mapZoom,
+       drag.x-dx*760/(drag.w*this._mapZoom),
+       drag.y-dy*444/(drag.h*this._mapZoom));
+   });
+   const endDrag=event=>{
+     const drag=this._mapDrag;
+     if(!drag||drag.id!==event.pointerId)return;
+     this._mapDrag=null;
+     if(drag.moved){
+       this._suppressMapClick=true;
+       setTimeout(()=>{this._suppressMapClick=false;},0);
+     }
+   };
+   viewport.addEventListener("pointerup",endDrag);
+   viewport.addEventListener("pointercancel",endDrag);
+   viewport.addEventListener("click",event=>{
+     if(!this._suppressMapClick)return;
+     event.preventDefault();event.stopPropagation();
+     this._suppressMapClick=false;
+   },true);
+   // Ctrl+wheel zoom avoids trapping normal dashboard scrolling.
+   viewport.addEventListener("wheel",event=>{
+     if(!event.ctrlKey&&!event.metaKey)return;
+     event.preventDefault();
+     this._changeMapZoom(event.deltaY<0?1:-1);
+   },{passive:false});
+   viewport.addEventListener("dblclick",event=>{
+     event.preventDefault();
+     this._changeMapZoom(1);
+   });
  }
  _stopLocationWatch(){
    if(this._geolocationWatchId!==null&&typeof navigator!=="undefined"&&navigator.geolocation){

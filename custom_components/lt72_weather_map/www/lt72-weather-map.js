@@ -924,7 +924,9 @@ class LT72WeatherMapCard extends HTMLElement {
      '.neighbor-label{font:500 13px Roboto,Arial,sans-serif;fill:var(--wmap-names);stroke:var(--wmap-land);stroke-width:2px;paint-order:stroke;pointer-events:none}',
      '.neighbor-land{pointer-events:none}', 
      '.wind-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}',
-     '.locate-button{position:absolute;z-index:4;bottom:9px;right:9px;font:inherit;font-size:11px;padding:7px 9px;border:1px solid var(--divider-color);border-radius:8px;background:var(--card-background-color,#fff);color:var(--primary-text-color);cursor:pointer;box-shadow:0 1px 4px #0003}',
+     '.locate-button{position:absolute;z-index:4;bottom:9px;left:9px;font:inherit;font-size:11px;padding:7px 9px;border:1px solid var(--divider-color);border-radius:8px;background:var(--card-background-color,#fff);color:var(--primary-text-color);cursor:pointer;box-shadow:0 1px 4px #0003}',
+     '.location-picker{position:absolute;z-index:4;bottom:9px;right:9px;display:flex;align-items:center;gap:4px;max-width:65%;font-size:11px;padding:5px 7px;border:1px solid var(--divider-color);border-radius:8px;background:var(--card-background-color,#fff);color:var(--primary-text-color);box-shadow:0 1px 4px #0003}',
+     '.location-picker select{font:inherit;color:inherit;background:transparent;border:0;max-width:100%;min-width:0;cursor:pointer}',
      '.gps-pulse{transform-box:fill-box;transform-origin:center;animation:gpsPulse 2s ease-in-out infinite}',
      '@keyframes gpsPulse{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:.85;transform:scale(1.25)}}',
      '.map svg{width:100%;height:auto;display:block;max-height:470px}',
@@ -975,7 +977,7 @@ class LT72WeatherMapCard extends HTMLElement {
          '<g class="neighbor-outlines">'+neighbors+'</g>'+
          countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+'</svg>'+
          (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':""),
-     locationButton,
+     locationButton,locationPicker,
      (mapMissing?'<div class="overlay-alert">⚠ '+WMAP_ESC(mode==="radar"?
        "Radaro duomenys nepasiekiami":"Orų prognozės nepasiekiamos")+'</div>':""),
      '</div>',
@@ -993,6 +995,9 @@ class LT72WeatherMapCard extends HTMLElement {
    });
    root.querySelectorAll("[data-locate]").forEach(node=>{
      node.addEventListener("click",()=>this._locate());
+   });
+   root.querySelectorAll("[data-location-choice]").forEach(node=>{
+     node.addEventListener("change",()=>this._selectLocation(node.value));
    });
    if(animateWind&&this._regions)this._startWindAnimation(weather);
    root.querySelectorAll("[data-mode]").forEach(node=>{
@@ -1073,6 +1078,16 @@ class LT72WeatherMapEditor extends HTMLElement {
        '<option value="'+id+'"'+((current.map_theme||"gray")===id?' selected':'')+'>'+
        WMAP_ESC(name)+'</option>'),
      '</select></label>',
+     '<h4>Mano vieta žemėlapyje</h4>',
+     '<label class="field"><span>Vietos šaltinis</span><select data-select="location_mode">',
+     ...WMAP_LOCATION_MODES.map(([id,name])=>
+       '<option value="'+id+'"'+((current.location_mode||"auto")===id?' selected':'')+'>'+WMAP_ESC(name)+'</option>'),
+     '</select></label>',
+     '<label class="field"><span>Miestas, kai pasirinktas miesto režimas</span><select data-select="location_city">',
+     ...WMAP_LOCATION_CITIES.map(c=>
+       '<option value="'+c[0]+'"'+((current.location_city||"kauno")===c[0]?' selected':'')+'>'+WMAP_ESC(c[1])+'</option>'),
+     '</select></label>',
+     '<p>Automatiškai: per HTTPS rodoma naršyklės vieta (gavus leidimą), o vietiniu HTTP adresu – Home Assistant namų koordinatės. Miestą taip pat galima laikinai pasirinkti pačioje kortoje.</p>',
      '<h4>Palydoviniai debesys</h4>',
      '<label class="field"><span>Palydovo vaizdo tipas</span><select data-select="satellite_style">',
      ...WMAP_SATELLITE_STYLES.map(([id,name])=>

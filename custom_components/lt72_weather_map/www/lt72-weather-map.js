@@ -506,9 +506,10 @@ class LT72WeatherMapCard extends HTMLElement {
    }
    try{
      const permission=await navigator.permissions.query({name:"geolocation"});
-     if(permission.state!=="denied"&&this.isConnected!==false)this._locate();
+     if(permission.state!=="denied"&&this.isConnected!==false&&
+        ["auto","browser"].includes(this._locationChoice()))this._locate();
    }catch(_error){
-     if(this.isConnected!==false)this._locate();
+     if(this.isConnected!==false&&["auto","browser"].includes(this._locationChoice()))this._locate();
    }
  }
  _locate(){

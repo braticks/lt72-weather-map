@@ -423,19 +423,36 @@ class LT72WeatherMapCard extends HTMLElement {
      navigator.geolocation.clearWatch(this._geolocationWatchId);
      this._geolocationWatchId=null;
    }
+   // Recheck after a card is detached and reattached to the dashboard.
+   this._checkedGeoPermission=false;
  }
  async _checkExistingLocationPermission(){
    if(this._checkedGeoPermission||this._config.show_location===false)return;
    this._checkedGeoPermission=true;
-   if(typeof navigator==="undefined"||!navigator.permissions?.query)return;
+   if(typeof navigator==="undefined"||!navigator.geolocation)return;
+   if(typeof window!=="undefined"&&window.isSecureContext===false){
+     this._geolocationError="Vietai nustatyti būtinas HTTPS adresas.";
+     this._render();return;
+   }
+   // Automatically request the browser's location; browser consent is required.
+   if(!navigator.permissions?.query){
+     if(this.isConnected!==false)this._locate();
+     return;
+   }
    try{
      const permission=await navigator.permissions.query({name:"geolocation"});
-     if(permission.state==="granted" && this.isConnected!==false)this._locate();
-   }catch(_error){ /* Permission querying is optional. */ }
+     if(permission.state!=="denied"&&this.isConnected!==false)this._locate();
+   }catch(_error){
+     if(this.isConnected!==false)this._locate();
+   }
  }
  _locate(){
    if(typeof navigator==="undefined"||!navigator.geolocation){
      this._geolocationError="Ši naršyklė nepalaiko vietos nustatymo.";
+     this._render();return;
+   }
+   if(typeof window!=="undefined"&&window.isSecureContext===false){
+     this._geolocationError="Vietai nustatyti būtinas HTTPS adresas.";
      this._render();return;
    }
    // Geolocation uses the browsing device, never Home Assistant/Proxmox IP.

@@ -376,7 +376,7 @@ async function testAutomaticBrowserLocation(){
   gps._regions=paths;
   gps.setConfig({type:"custom:lt72-weather-map"});
   gps.connectedCallback();
-  await Promise.resolve();
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(requests,1,"Prompt state should start browser geolocation");
   assert(gps.shadowRoot.innerHTML.includes('class="device-location"'),
     "GPS dot should be rendered on the map");
@@ -388,7 +388,7 @@ async function testAutomaticBrowserLocation(){
   denied._regions=paths;
   denied.setConfig({type:"custom:lt72-weather-map"});
   denied.connectedCallback();
-  await Promise.resolve();
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(requests,1,"Denied permission must not start geolocation");
   denied.disconnectedCallback();
 

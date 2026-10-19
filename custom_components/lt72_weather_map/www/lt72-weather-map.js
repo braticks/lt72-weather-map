@@ -372,7 +372,7 @@ class LT72WeatherMapCard extends HTMLElement {
    this._devicePosition=null;this._geolocationError="";
    this._locationOverride=null;
    this._mapZoom=1;this._mapCenter={x:380,y:222};this._mapDrag=null;
-   this._suppressMapClick=false;
+   this._suppressMapClick=false;this._renderPending=false;
    this._geolocationWatchId=null;this._checkedGeoPermission=false;
    this._satelliteError=false;this._satelliteBucket=null;
    this._hassSignature=null;this._windInViewport=true;
@@ -506,7 +506,8 @@ class LT72WeatherMapCard extends HTMLElement {
    if(this._config.show_zoom===false)return;
    const root=this.shadowRoot;
    root.querySelectorAll("[data-map-zoom]").forEach(button=>{
-     button.addEventListener("click",()=>{
+     button.addEventListener("click",event=>{
+       event?.stopPropagation?.();
        const action=button.getAttribute("data-map-zoom");
        if(action==="reset")this._setMapZoom(1,380,222);
        else this._changeMapZoom(action==="in"?1:-1);
@@ -541,6 +542,7 @@ class LT72WeatherMapCard extends HTMLElement {
        this._suppressMapClick=true;
        setTimeout(()=>{this._suppressMapClick=false;},0);
      }
+     if(this._renderPending)this._render();
    };
    viewport.addEventListener("pointerup",endDrag);
    viewport.addEventListener("pointercancel",endDrag);
@@ -775,6 +777,12 @@ class LT72WeatherMapCard extends HTMLElement {
  _render(){
    const root=this.shadowRoot;
    if(!root)return;
+   // Replacing the shadow DOM closes native select menus and breaks pointer drag.
+   // Hold nonessential data redraws until the current interaction finishes.
+   if(root.activeElement?.tagName==="SELECT"||this._mapDrag){
+     this._renderPending=true;return;
+   }
+   this._renderPending=false;
    this._stopWindAnimation();
    const entity=this._entity(), data=entity?.attributes||{};
    const activeAlerts=!!data.alerts_available, weatherReady=!!data.weather_available;
@@ -1131,7 +1139,16 @@ class LT72WeatherMapCard extends HTMLElement {
      node.addEventListener("click",()=>this._locate());
    });
    root.querySelectorAll("[data-location-choice]").forEach(node=>{
-     node.addEventListener("change",()=>this._selectLocation(node.value));
+     node.addEventListener("change",()=>{
+       const selected=node.value;
+       node.blur?.();
+       this._selectLocation(selected);
+     });
+   });
+   root.querySelectorAll("select").forEach(node=>{
+     node.addEventListener("blur",()=>{
+       if(this._renderPending)this._render();
+     });
    });
    this._attachMapNavigation();
    if(animateWind&&this._regions)this._startWindAnimation(weather);
@@ -1161,19 +1178,41 @@ class LT72WeatherMapEditor extends HTMLElement {
  constructor(){
    super();this.attachShadow({mode:"open"});
    this._config={type:"custom:lt72-weather-map"};this._hass=null;
+   this._editorConfigSignature=null;this._editorEntitiesSignature=null;
+   this._editorPendingRender=false;
  }
- setConfig(config){this._config={...config};this._render();}
- set hass(value){this._hass=value;this._render();}
+ setConfig(config){
+   const signature=JSON.stringify(config);
+   if(this._editorConfigSignature===signature)return;
+   this._config={...config};
+   this._editorConfigSignature=signature;
+   this._render();
+ }
+ set hass(value){
+   this._hass=value;
+   // Only sensor picker option changes require redrawing the whole editor.
+   const entities=value?.states?Object.values(value.states).filter(s=>
+     s.entity_id.startsWith("sensor.")&&s.attributes?.saltinis==="LT72 Weather Map"):[];
+   const signature=JSON.stringify(entities.map(s=>[s.entity_id,s.attributes?.friendly_name]).sort());
+   if(signature===this._editorEntitiesSignature)return;
+   this._editorEntitiesSignature=signature;
+   this._render();
+ }
  _change(key,value){
    const next={...this._config};
    if(key==="compact"){if(value)next.compact=true;else delete next.compact;}
    else if(key.startsWith("show_")||key==="animated_wind"){if(value)delete next[key];else next[key]=false;}
    else{if(value)next[key]=value;else delete next[key];}
    this._config=next;
+   this._editorConfigSignature=JSON.stringify(next);
    this.dispatchEvent(new CustomEvent("config-changed",{bubbles:true,composed:true,detail:{config:next}}));
  }
  _render(){
    const root=this.shadowRoot;if(!root)return;
+   if(root.activeElement?.tagName==="SELECT"){
+     this._editorPendingRender=true;return;
+   }
+   this._editorPendingRender=false;
    const current=this._config;
    const entities=this._hass?Object.values(this._hass.states).filter(s=>
      s.entity_id.startsWith("sensor.")&&s.attributes?.saltinis==="LT72 Weather Map"):[];
@@ -1262,8 +1301,12 @@ class LT72WeatherMapEditor extends HTMLElement {
    ].join("");
    root.querySelectorAll("[data-setting-text]").forEach(el=>
      el.addEventListener("change",()=>this._change(el.getAttribute("data-setting-text"),el.value)));
-   root.querySelectorAll("[data-select]").forEach(el=>
-     el.addEventListener("change",()=>this._change(el.getAttribute("data-select"),el.value)));
+   root.querySelectorAll("[data-select]").forEach(el=>{
+     el.addEventListener("change",()=>this._change(el.getAttribute("data-select"),el.value));
+     el.addEventListener("blur",()=>{
+       if(this._editorPendingRender)this._render();
+     });
+   });
    root.querySelectorAll("[data-setting]").forEach(el=>
      el.addEventListener("change",()=>this._change(el.getAttribute("data-setting"),el.checked)));
  }

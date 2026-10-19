@@ -392,6 +392,7 @@ assert(Math.abs(zoomCard._mapCenter.x-homePoint.x)<0.01);
 assert(Math.abs(zoomCard._mapCenter.y-homePoint.y)<0.01);
 
 // Exercise navigation callbacks with a minimal fake DOM.
+ctx.setTimeout=callback=>{callback();return 1;};
 const mapEvents={},btnEvents={};
 const fakeScene={style:{}};
 const fakeView={

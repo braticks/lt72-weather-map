@@ -356,6 +356,87 @@ assert(card.shadowRoot.innerHTML.includes("modelis dabar"));
 console.log("Recent-model 15-minute wind averaging/fallback labels passed.");
 
  
+// Zoom is applied to one scene containing SVG radar/satellite and wind canvas.
+assert.equal(vm.runInContext("wmapClampMapZoom('2')",ctx),2);
+assert.equal(vm.runInContext("wmapClampMapZoom(50)",ctx),4);
+assert.equal(vm.runInContext("wmapClampMapZoom(-2)",ctx),1);
+const zoomCard=vm.runInContext("new LT72WeatherMapCard()",ctx);
+zoomCard._regions=paths;
+zoomCard._neighbors=neighbors;
+zoomCard.setConfig({type:"custom:lt72-weather-map",layer:"wind",default_zoom:"2"});
+zoomCard.hass={states:{"sensor.lt72_weather":{entity_id:"sensor.lt72_weather",state:"Raudona",attributes}}};
+const zoomMarkup=zoomCard.shadowRoot.innerHTML;
+assert(zoomMarkup.includes('class="map-viewport zoomed"'));
+assert(zoomMarkup.includes('class="map-scene"'));
+assert(zoomMarkup.includes('data-map-zoom="in"'));
+assert(zoomMarkup.includes('data-map-zoom="out"'));
+assert(zoomMarkup.includes('data-map-zoom="reset"'));
+const sceneStart=zoomMarkup.indexOf('class="map-scene"');
+const svgAt=zoomMarkup.indexOf('<svg viewBox="0 0 760 444"',sceneStart);
+const canvasAt=zoomMarkup.indexOf('class="wind-canvas"',svgAt);
+const closeScene=zoomMarkup.indexOf('</div></div>',sceneStart);
+assert(sceneStart>=0&&svgAt>sceneStart&&canvasAt>svgAt&&closeScene>canvasAt,
+  "SVG and wind canvas must share the zoom transform");
+assert.equal(zoomCard._mapZoom,2);
+zoomCard._setMapZoom(40,800,-100);
+assert.equal(zoomCard._mapZoom,4);
+assert(zoomCard._mapCenter.x<=665&&zoomCard._mapCenter.y>=55.5);
+zoomCard._setMapZoom(1,0,0);
+assert.equal(zoomCard._mapCenter.x,380);
+assert.equal(zoomCard._mapCenter.y,222);
+zoomCard._hass.config={latitude:54.8985,longitude:23.9036};
+const homePoint=vm.runInContext("wmapLocationMarker({latitude:54.8985,longitude:23.9036})",ctx);
+zoomCard._changeMapZoom(1);
+assert.equal(zoomCard._mapZoom,1.5);
+assert(Math.abs(zoomCard._mapCenter.x-homePoint.x)<0.01);
+assert(Math.abs(zoomCard._mapCenter.y-homePoint.y)<0.01);
+
+// Exercise navigation callbacks with a minimal fake DOM.
+ctx.setTimeout=callback=>{callback();return 1;};
+const mapEvents={},btnEvents={};
+const fakeScene={style:{}};
+const fakeView={
+  classList:{toggle:()=>{}},
+  getBoundingClientRect:()=>({width:760,height:444}),
+  setPointerCapture:()=>{},
+  addEventListener:(kind,cb)=>{mapEvents[kind]=cb;}
+};
+const fakeButtons=["in","out","reset"].map(action=>({
+  action,disabled:false,textContent:"",
+  getAttribute:()=>action,
+  addEventListener:(kind,cb)=>{btnEvents[action]=cb;}
+}));
+zoomCard.shadowRoot.querySelector=(sel)=>{
+  if(sel===".map-scene")return fakeScene;
+  if(sel===".map-viewport")return fakeView;
+  if(sel==='[data-map-zoom="in"]')return fakeButtons[0];
+  if(sel==='[data-map-zoom="out"]')return fakeButtons[1];
+  if(sel==='[data-map-zoom="reset"]')return fakeButtons[2];
+  return null;
+};
+zoomCard.shadowRoot.querySelectorAll=(sel)=>sel==="[data-map-zoom]"?fakeButtons:[];
+zoomCard._attachMapNavigation();
+btnEvents.in();
+assert.equal(zoomCard._mapZoom,2);
+assert(fakeScene.style.transform.includes("scale(2)"));
+const x0=zoomCard._mapCenter.x;
+mapEvents.pointerdown({button:0,pointerId:1,clientX:200,clientY:200});
+mapEvents.pointermove({pointerId:1,clientX:240,clientY:200,preventDefault:()=>{}});
+assert(zoomCard._mapCenter.x<x0,"Dragging the map right moves center west");
+mapEvents.pointerup({pointerId:1});
+btnEvents.reset();
+assert.equal(zoomCard._mapZoom,1);
+assert.equal(fakeButtons[1].disabled,true);
+zoomCard.setConfig({type:"custom:lt72-weather-map",show_zoom:false,default_zoom:"3"});
+assert.equal(zoomCard._mapZoom,1);
+assert(!zoomCard.shadowRoot.innerHTML.includes('data-map-zoom="in"'));
+editor._change("default_zoom","3");
+assert.equal(editor.event.detail.config.default_zoom,"3");
+assert(editor.shadowRoot.innerHTML.includes('data-select="default_zoom"'));
+editor._change("show_zoom",false);
+assert.equal(editor.event.detail.config.show_zoom,false);
+console.log("Map zoom controls, persistent default, shared overlays, drag pan and bounds passed.");
+
 // Browser geolocation is requested automatically on first display, but consent
 // stays under the browser's control and denied permissions are never bypassed.
 async function testAutomaticBrowserLocation(){

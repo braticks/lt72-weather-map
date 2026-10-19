@@ -105,6 +105,7 @@ const WMAP_FLAGS=[
  ["show_thunderstorms","Rodyti prognozuojamą perkūniją ⚡"],
  ["show_toolbar","Rodyti sluoksnių perjungimą"],
  ["show_location","Rodyti „Mano vieta“ žymeklį"],
+ ["show_zoom","Rodyti žemėlapio priartinimo mygtukus"],
  ["animated_wind","Animuoti vėjo judėjimą"]
 ];
 const WMAP_URL="/lt72_weather_map/";
@@ -115,6 +116,11 @@ const WMAP_NORMAL=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u03
 const WMAP_KEY=s=>WMAP_REGIONS.find(r=>WMAP_NORMAL(s).startsWith(WMAP_NORMAL(r[1])))?.[0];
 
 const WMAP_ZOOM=6, WMAP_TILE=256;
+const WMAP_MAP_ZOOM_STEPS=[1,1.5,2,2.5,3,4];
+function wmapClampMapZoom(value){
+ const z=Number(value);
+ return Number.isFinite(z)?Math.max(1,Math.min(4,z)):1;
+}
 function wmapWorld(lon,lat,z=WMAP_ZOOM){
  const sin=Math.sin(lat*Math.PI/180);
  return [(lon+180)/360*Math.pow(2,z)*WMAP_TILE,
@@ -365,6 +371,8 @@ class LT72WeatherMapCard extends HTMLElement {
    this._windRaf=null;this._windParticles=[];this._windLastTime=0;
    this._devicePosition=null;this._geolocationError="";
    this._locationOverride=null;
+   this._mapZoom=1;this._mapCenter={x:380,y:222};this._mapDrag=null;
+   this._suppressMapClick=false;
    this._geolocationWatchId=null;this._checkedGeoPermission=false;
    this._satelliteError=false;this._satelliteBucket=null;
    this._hassSignature=null;this._windInViewport=true;
@@ -376,6 +384,7 @@ class LT72WeatherMapCard extends HTMLElement {
    if(!config||config.type!=="custom:lt72-weather-map")throw Error("Netinkamas LT72 Weather Map kortos tipas");
    const before=this._config.region;
    const previousLayer=this._config.layer;
+   const previousZoom=this._config.default_zoom,previousShowZoom=this._config.show_zoom;
    const previousLocation=JSON.stringify([this._config.location_mode,this._config.location_city,this._config.show_location]);
    this._config={...config};
    const changedLocation=previousLocation!==JSON.stringify([config.location_mode,config.location_city,config.show_location]);
@@ -390,6 +399,9 @@ class LT72WeatherMapCard extends HTMLElement {
    else if(before!==config.region)this._selected=null;
    if(this._mode===null||previousLayer!==config.layer)this._mode=config.layer||"radar";
    if(!WMAP_MODES.some(m=>m[0]===this._mode))this._mode="radar";
+   if(config.show_zoom===false)this._setMapZoom(1,380,222);
+   else if(previousZoom!==config.default_zoom||previousShowZoom===false)
+     this._setMapZoom(config.default_zoom??1,380,222);
    this._render();
    if(changedLocation&&this.isConnected===true)this._checkExistingLocationPermission();
  }
@@ -441,8 +453,112 @@ class LT72WeatherMapCard extends HTMLElement {
      this._windPageListener=null;
    }
    this._stopLocationWatch();
+   this._mapDrag=null;
    // Recheck after a card is detached and reattached to the dashboard.
    this._checkedGeoPermission=false;
+ }
+ _mapZoomStyle(){
+   const z=this._mapZoom;
+   const tx=(380-z*this._mapCenter.x)/760*100;
+   const ty=(222-z*this._mapCenter.y)/444*100;
+   return "translate("+tx.toFixed(5)+"%,"+ty.toFixed(5)+"%) scale("+z+")";
+ }
+ _refreshMapZoom(){
+   const root=this.shadowRoot;
+   const scene=root?.querySelector?.(".map-scene");
+   if(scene)scene.style.transform=this._mapZoomStyle();
+   const viewport=root?.querySelector?.(".map-viewport");
+   viewport?.classList?.toggle("zoomed",this._mapZoom>1);
+   const zoomIn=root?.querySelector?.('[data-map-zoom="in"]');
+   const zoomOut=root?.querySelector?.('[data-map-zoom="out"]');
+   const reset=root?.querySelector?.('[data-map-zoom="reset"]');
+   if(zoomIn)zoomIn.disabled=this._mapZoom>=4;
+   if(zoomOut)zoomOut.disabled=this._mapZoom<=1;
+   if(reset){
+     reset.disabled=this._mapZoom<=1;
+     reset.textContent=this._mapZoom+"×";
+   }
+ }
+ _setMapZoom(value,x=this._mapCenter.x,y=this._mapCenter.y){
+   const z=wmapClampMapZoom(value);
+   this._mapZoom=z;
+   this._mapCenter={
+     x:Math.min(760-380/z,Math.max(380/z,Number.isFinite(x)?x:380)),
+     y:Math.min(444-222/z,Math.max(222/z,Number.isFinite(y)?y:222))
+   };
+   this._refreshMapZoom();
+ }
+ _changeMapZoom(direction){
+   if(this._config.show_zoom===false)return;
+   const steps=WMAP_MAP_ZOOM_STEPS;
+   const next=direction>0?steps.find(z=>z>this._mapZoom+0.0001):
+     [...steps].reverse().find(z=>z<this._mapZoom-0.0001);
+   if(next===undefined)return;
+   let {x,y}=this._mapCenter;
+   // The first zoom-in focuses on the visible GPS/home/city marker.
+   if(this._mapZoom===1&&direction>0&&this._config.show_location!==false){
+     const point=wmapLocationMarker(this._locationInfo()?.coords);
+     if(point){x=point.x;y=point.y;}
+   }
+   this._setMapZoom(next,x,y);
+ }
+ _attachMapNavigation(){
+   if(this._config.show_zoom===false)return;
+   const root=this.shadowRoot;
+   root.querySelectorAll("[data-map-zoom]").forEach(button=>{
+     button.addEventListener("click",()=>{
+       const action=button.getAttribute("data-map-zoom");
+       if(action==="reset")this._setMapZoom(1,380,222);
+       else this._changeMapZoom(action==="in"?1:-1);
+     });
+   });
+   const viewport=root.querySelector?.(".map-viewport");
+   if(!viewport)return;
+   viewport.addEventListener("pointerdown",event=>{
+     if(this._mapZoom<=1||event.button!==0||this._mapDrag)return;
+     const rect=viewport.getBoundingClientRect();
+     if(!rect.width||!rect.height)return;
+     this._mapDrag={id:event.pointerId,px:event.clientX,py:event.clientY,
+       x:this._mapCenter.x,y:this._mapCenter.y,w:rect.width,h:rect.height,moved:false};
+     viewport.setPointerCapture?.(event.pointerId);
+   });
+   viewport.addEventListener("pointermove",event=>{
+     const drag=this._mapDrag;
+     if(!drag||event.pointerId!==drag.id)return;
+     const dx=event.clientX-drag.px,dy=event.clientY-drag.py;
+     if(Math.abs(dx)+Math.abs(dy)>4)drag.moved=true;
+     if(!drag.moved)return;
+     event.preventDefault();
+     this._setMapZoom(this._mapZoom,
+       drag.x-dx*760/(drag.w*this._mapZoom),
+       drag.y-dy*444/(drag.h*this._mapZoom));
+   });
+   const endDrag=event=>{
+     const drag=this._mapDrag;
+     if(!drag||drag.id!==event.pointerId)return;
+     this._mapDrag=null;
+     if(drag.moved){
+       this._suppressMapClick=true;
+       setTimeout(()=>{this._suppressMapClick=false;},0);
+     }
+   };
+   viewport.addEventListener("pointerup",endDrag);
+   viewport.addEventListener("pointercancel",endDrag);
+   viewport.addEventListener("click",event=>{
+     if(!this._suppressMapClick)return;
+     event.preventDefault();event.stopPropagation();
+     this._suppressMapClick=false;
+   },true);
+   // Ctrl+wheel zoom avoids trapping normal dashboard scrolling.
+   viewport.addEventListener("wheel",event=>{
+     if(!event.ctrlKey&&!event.metaKey)return;
+     event.preventDefault();
+     this._changeMapZoom(event.deltaY<0?1:-1);
+   },{passive:false});
+   viewport.addEventListener("dblclick",event=>{
+     event.preventDefault();
+     this._changeMapZoom(1);
+   });
  }
  _stopLocationWatch(){
    if(this._geolocationWatchId!==null&&typeof navigator!=="undefined"&&navigator.geolocation){
@@ -836,6 +952,14 @@ class LT72WeatherMapCard extends HTMLElement {
        "HA namų koordinatės nenustatytos – pasirinkite miestą.":"")
    );
    const animateWind=showWind&&this._config.animated_wind!==false;
+   const zoomControls=this._config.show_zoom===false||!this._regions?"": 
+     '<div class="zoom-controls" role="group" aria-label="Žemėlapio mastelis">'+
+     '<button type="button" data-map-zoom="out" aria-label="Atitolinti" title="Atitolinti"'+
+       (this._mapZoom<=1?' disabled':'')+'>−</button>'+
+     '<button type="button" data-map-zoom="reset" aria-label="Atkurti Lietuvos vaizdą" title="Atkurti visą vaizdą"'+
+       (this._mapZoom<=1?' disabled':'')+'>'+this._mapZoom+'×</button>'+
+     '<button type="button" data-map-zoom="in" aria-label="Priartinti" title="Priartinti"'+
+       (this._mapZoom>=4?' disabled':'')+'>+</button></div>';
    const buttons=WMAP_MODES.map(m=>
      '<button class="mode '+(mode===m[0]?'active':'')+'" data-mode="'+m[0]+
      '" type="button">'+WMAP_ESC(m[1])+'</button>').join("");
@@ -920,6 +1044,12 @@ class LT72WeatherMapCard extends HTMLElement {
      '.mode{border:1px solid var(--divider-color,#9ca3af);color:var(--primary-text-color);background:var(--secondary-background-color,#f3f4f6);font:inherit;font-size:12px;padding:7px 9px;border-radius:8px;cursor:pointer}',
      '.mode.active{border-color:var(--primary-color,#2196f3);box-shadow:inset 0 0 0 1px var(--primary-color,#2196f3);font-weight:700}',
      '.map{position:relative;background:var(--wmap-sea,#7b858c);border-radius:10px;overflow:hidden;isolation:isolate}',
+     '.map-viewport{position:relative;width:100%;max-width:805px;margin:0 auto;aspect-ratio:760 / 444;overflow:hidden;touch-action:pan-y}',
+     '.map-viewport.zoomed{cursor:grab;touch-action:none}.map-viewport.zoomed:active{cursor:grabbing}',
+     '.map-scene{position:absolute;inset:0;transform-origin:0 0;will-change:transform}',
+     '.zoom-controls{position:absolute;right:9px;top:9px;z-index:5;display:flex;gap:3px;padding:3px;background:var(--card-background-color,#fff);box-shadow:0 1px 4px #0004;border:1px solid var(--divider-color);border-radius:9px}',
+     '.zoom-controls button{font:600 14px Roboto,Arial,sans-serif;background:transparent;color:var(--primary-text-color);border:0;border-radius:6px;min-height:30px;min-width:30px;padding:0 5px;cursor:pointer}',
+     '.zoom-controls button:disabled{cursor:default;opacity:.4}',
      '.satellite-layer{pointer-events:none}',
      '.neighbor{fill:none;stroke:var(--wmap-border);stroke-width:1.35;stroke-opacity:.48;pointer-events:none}',
      '.neighbor-label{font:500 13px Roboto,Arial,sans-serif;fill:var(--wmap-names);stroke:var(--wmap-land);stroke-width:2px;paint-order:stroke;pointer-events:none}',
@@ -930,7 +1060,7 @@ class LT72WeatherMapCard extends HTMLElement {
      '.location-picker select{font:inherit;color:inherit;background:transparent;border:0;max-width:100%;min-width:0;cursor:pointer}',
      '.gps-pulse{transform-box:fill-box;transform-origin:center;animation:gpsPulse 2s ease-in-out infinite}',
      '@keyframes gpsPulse{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:.85;transform:scale(1.25)}}',
-     '.map svg{width:100%;height:auto;display:block;max-height:470px}',
+     '.map-scene svg{width:100%;height:100%;display:block;max-height:none}',
      '.county-label{font:600 13px Roboto,Arial,sans-serif;fill:var(--wmap-label);paint-order:stroke;stroke:var(--wmap-land);stroke-width:3px;stroke-linejoin:round;pointer-events:none}',
      '.city-temperature{pointer-events:none;filter:drop-shadow(0 1px 1px #0005)}',
      '.city-label{font:600 13px Roboto,Arial,sans-serif;fill:#fff;stroke:#1b2939;stroke-width:2.5px;paint-order:stroke;stroke-linejoin:round}',
@@ -972,13 +1102,16 @@ class LT72WeatherMapCard extends HTMLElement {
      '<div class="map">',
      this._error?'<div class="missing">'+WMAP_ESC(this._error)+'</div>':
      !this._regions?'<div class="missing">Įkeliamas Lietuvos žemėlapis...</div>':
-       '<svg viewBox="0 0 760 444" aria-label="LT72 pavojaus ir orų žemėlapis" role="img">'+
-         '<rect x="0" y="0" width="760" height="444" fill="var(--wmap-sea)"></rect>'+
-         neighborBase+satelliteImage+images+
-         '<g class="neighbor-outlines">'+neighbors+'</g>'+
-         countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+'</svg>'+
-         (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':""),
-     locationButton,locationPicker,
+       '<div class="map-viewport'+(this._mapZoom>1?' zoomed':'')+'">'+
+         '<div class="map-scene" style="transform:'+this._mapZoomStyle()+'">'+
+           '<svg viewBox="0 0 760 444" aria-label="LT72 pavojaus ir orų žemėlapis" role="img">'+
+             '<rect x="0" y="0" width="760" height="444" fill="var(--wmap-sea)"></rect>'+
+             neighborBase+satelliteImage+images+
+             '<g class="neighbor-outlines">'+neighbors+'</g>'+
+             countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+'</svg>'+
+           (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':"")+
+         '</div></div>',
+     locationButton,locationPicker,zoomControls,
      (mapMissing?'<div class="overlay-alert">⚠ '+WMAP_ESC(mode==="radar"?
        "Radaro duomenys nepasiekiami":"Orų prognozės nepasiekiamos")+'</div>':""),
      '</div>',
@@ -1000,6 +1133,7 @@ class LT72WeatherMapCard extends HTMLElement {
    root.querySelectorAll("[data-location-choice]").forEach(node=>{
      node.addEventListener("change",()=>this._selectLocation(node.value));
    });
+   this._attachMapNavigation();
    if(animateWind&&this._regions)this._startWindAnimation(weather);
    root.querySelectorAll("[data-mode]").forEach(node=>{
      node.addEventListener("click",()=>{
@@ -1079,6 +1213,12 @@ class LT72WeatherMapEditor extends HTMLElement {
        '<option value="'+id+'"'+((current.map_theme||"gray")===id?' selected':'')+'>'+
        WMAP_ESC(name)+'</option>'),
      '</select></label>',
+     '<h4>Žemėlapio priartinimas</h4>',
+     '<label class="field"><span>Pradinis priartinimas</span><select data-select="default_zoom">',
+     ...WMAP_MAP_ZOOM_STEPS.map(z=>
+       '<option value="'+z+'"'+(wmapClampMapZoom(current.default_zoom)===z?' selected':'')+'>'+z+'×</option>'),
+     '</select></label>',
+     '<p>Žemėlapio + / − / mastelio mygtukai rodomi, kai įjungtas „Rodyti žemėlapio priartinimo mygtukus“. Priartintą žemėlapį galima slinkti pirštu arba pele.</p>',
      '<h4>Mano vieta žemėlapyje</h4>',
      '<label class="field"><span>Vietos šaltinis</span><select data-select="location_mode">',
      ...WMAP_LOCATION_MODES.map(([id,name])=>

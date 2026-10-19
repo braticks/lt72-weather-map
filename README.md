@@ -13,9 +13,10 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - **Sniegas** – Open-Meteo prognozuojamas snygis. Sniego prognozė pagal apskritis nėra tas pats, kas radaro sniego spalvinimas.
 - **Palydovas** – [EUMETSAT EUMETView](https://view.eumetsat.int/) WMS vaizdas tame pačiame geografiniame žemėlapyje. Nuo v0.5.1 numatytasis variantas – **IR 10,5 µm**, vienodai naudojamas dieną ir naktį; neprivalomas GeoColour dienos ir nakties kompozitas prieinamas per UI. Debesų vaizdo ryškumas keičiamas UI. **Palydovo vaizdo realų atvaizdavimą reikia patikrinti naudojamoje HA naršyklėje:** viešasis WMS gali vėluoti ar riboti užklausas; nutrūkus ryšiui korta parodo įspėjimą.
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
+- **🔍 Žemėlapio priartinimas** – kortoje yra **+**, **−** ir **1× / mastelio atkūrimo** mygtukai. Mastelis nuo 1× iki 4×, priartintą žemėlapį galima slinkti pele ar pirštu; dvigubas paspaudimas priartina, Ctrl + pelės ratukas taip pat valdo mastelį. Visa SVG geografija, kritulių radaro, palydovo, temperatūros, GPS ir vėjo animacijos sluoksniai priartinami kartu. Pirmas „+“ nukreipia vaizdą į rodomą GPS / namų / miesto žymeklį, jei toks yra. Kortos UI redaktoriuje galima parinkti **pradinį mastelį** ir išjungti priartinimo valdiklius.
 - **📍 Vieta žemėlapyje** – numatytuoju automatinio režimo atveju per HTTPS prašoma naršyklės GPS leidimo (mėlynas taškas), o per vietinį HTTP naudojamos **Home Assistant namų koordinatės** iš HA General nustatymų (žalias taškas). Tai **ne serverio IP geolokacija**, o HA savininko įrašyta namų vieta. Taip pat galima pasirinkti miestą (oranžinis taškas) iš 10 apskričių centrų ir Biržų. Vietos šaltinį galima nustatyti kortos UI redaktoriuje arba laikinai perjungti pačios kortos žemėlapio apačioje esančiame meniu. Naršyklės GPS koordinates apdoroja tik naršyklė – jos nesiunčiamos HA serveriui. Tikslus GPS per HTTP IP paprastai neveikia, nes reikalingas HTTPS.
 
-**Versija:** [v0.5.8](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.8) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.9](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.9) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -33,7 +34,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.8`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.9`.
 
 ## Saugumas ir informacija
 
@@ -53,6 +54,8 @@ layer: wind
 animated_wind: true
 wind_particles: medium # low | medium | high
 show_location: true
+show_zoom: true
+# default_zoom: 2  # 1, 1.5, 2, 2.5, 3 arba 4
 location_mode: auto   # auto | browser | home | city
 # location_city: birzai  # only when mode is city
 show_weather_labels: true
@@ -177,7 +180,7 @@ animated_wind: true
 
 Po atnaujinimo verta patikrinti našumą tikrame kompiuteryje, telefone ir senesnėje planšetėje. Automatiniai testai patikrina logiką, ne realius FPS.
 
-### v0.5.8 – modelio paskutinio 15 min intervalo vėjo vidurkis
+### v0.5.9 – modelio paskutinio 15 min intervalo vėjo vidurkis
 
 - Vėjo greitis ir kryptis apskaičiuojami iš dviejų paskutinio prieinamo 15 minučių intervalo **Open-Meteo minutely_15 modelio momentinių** taškų. Greitis yra dviejų reikšmių aritmetinis vidurkis, o kryptis – pagal greitį svertinis kampų vidurkis; ignoruojami būsimi, seni ar trūkstami taškai.
 - Tai **apytikslis modelinis**, ne stoties išmatuotas ar realių pastarųjų 15 min stebėtas, vėjo vidurkis. Modelio laikas gali kiek atsilikti.
@@ -185,4 +188,4 @@ Po atnaujinimo verta patikrinti našumą tikrame kompiuteryje, telefone ir senes
 - Jei patikimų 15 min duomenų nėra, naudojama ankstesnė `current` modelio vėjo reikšmė. Tokiu atveju detalių eilutėje rodoma `modelis dabar`; 15 min žyma neteikiama.
 - Suvidurkintas vėjo greitis ir kryptis naudojami ir dalelių animacijai. Visos **v0.5.5** našumo optimizacijos, įskaitant adaptyvų FPS ir išankstinį vėjo tinklelį, išsaugotos.
 
-Atnaujinti į `v0.5.8`: HACS → LT72 Weather Map → Update, perkrauti Home Assistant ir perkrauti naršyklės kortą (`Ctrl+F5`).
+Atnaujinti į `v0.5.9`: HACS → LT72 Weather Map → Update, perkrauti Home Assistant ir perkrauti naršyklės kortą (`Ctrl+F5`).

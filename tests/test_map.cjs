@@ -170,7 +170,7 @@ card.setConfig({type:"custom:lt72-weather-map",layer:"snow"});
 assert.equal(card._mode,"snow");
 console.log("All 10 counties, weather overlays, RainViewer tiles and UI editor passed.");
 
-// Device geolocation always belongs to the browser, with an explicit user click.
+// The map displays the browsing device's GPS dot (and offers a retry button).
 assert(visible.includes('data-locate="true"'));
 assert(visible.includes("Mano vieta"));
 card.setConfig({type:"custom:lt72-weather-map",layer:"wind"});
@@ -354,3 +354,52 @@ card.hass={states:{"sensor.lt72_weather_map":{
 assert(!card.shadowRoot.innerHTML.includes("14.5 km/h (15 min)"));
 assert(card.shadowRoot.innerHTML.includes("modelis dabar"));
 console.log("Recent-model 15-minute wind averaging/fallback labels passed.");
+
+ 
+// Browser geolocation is requested automatically on first display, but consent
+// stays under the browser's control and denied permissions are never bypassed.
+async function testAutomaticBrowserLocation(){
+  let requests=0,stopped=0;
+  ctx.window.isSecureContext=true;
+  ctx.navigator={
+    permissions:{query:async()=>({state:"prompt"})},
+    geolocation:{
+      watchPosition(success){
+        requests++;
+        success({coords:{latitude:54.93,longitude:23.90,accuracy:30}});
+        return 42;
+      },
+      clearWatch(id){assert.equal(id,42);stopped++;}
+    }
+  };
+  const gps=vm.runInContext("new LT72WeatherMapCard()",ctx);
+  gps._regions=paths;
+  gps.setConfig({type:"custom:lt72-weather-map"});
+  gps.connectedCallback();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(requests,1,"Prompt state should start browser geolocation");
+  assert(gps.shadowRoot.innerHTML.includes('class="device-location"'),
+    "GPS dot should be rendered on the map");
+  gps.disconnectedCallback();
+  assert.equal(stopped,1,"Geolocation tracking stops on disconnect");
+
+  ctx.navigator.permissions.query=async()=>({state:"denied"});
+  const denied=vm.runInContext("new LT72WeatherMapCard()",ctx);
+  denied._regions=paths;
+  denied.setConfig({type:"custom:lt72-weather-map"});
+  denied.connectedCallback();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(requests,1,"Denied permission must not start geolocation");
+  denied.disconnectedCallback();
+
+  ctx.window.isSecureContext=false;
+  const insecure=vm.runInContext("new LT72WeatherMapCard()",ctx);
+  insecure._regions=paths;
+  insecure.setConfig({type:"custom:lt72-weather-map"});
+  insecure.connectedCallback();
+  assert(insecure.shadowRoot.innerHTML.includes("HTTPS adresas"));
+  assert.equal(requests,1,"Insecure HTTP must not start geolocation");
+  insecure.disconnectedCallback();
+  console.log("Automatic browser geolocation, GPS map dot and HTTPS guard passed.");
+}
+testAutomaticBrowserLocation().catch(err=>{console.error(err);process.exitCode=1;});

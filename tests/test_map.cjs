@@ -172,7 +172,7 @@ console.log("All 10 counties, weather overlays, RainViewer tiles and UI editor p
 
 // The map displays the browsing device's GPS dot (and offers a retry button).
 assert(visible.includes('data-locate="true"'));
-assert(visible.includes("Mano vieta"));
+assert(visible.includes('data-location-choice'));
 card.setConfig({type:"custom:lt72-weather-map",layer:"wind"});
 assert(card.shadowRoot.innerHTML.includes('class="wind-canvas"'));
 card._devicePosition={latitude:54.93,longitude:23.90,accuracy:50};

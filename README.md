@@ -13,9 +13,9 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - **Sniegas** – Open-Meteo prognozuojamas snygis. Sniego prognozė pagal apskritis nėra tas pats, kas radaro sniego spalvinimas.
 - **Palydovas** – [EUMETSAT EUMETView](https://view.eumetsat.int/) WMS vaizdas tame pačiame geografiniame žemėlapyje. Nuo v0.5.1 numatytasis variantas – **IR 10,5 µm**, vienodai naudojamas dieną ir naktį; neprivalomas GeoColour dienos ir nakties kompozitas prieinamas per UI. Debesų vaizdo ryškumas keičiamas UI. **Palydovo vaizdo realų atvaizdavimą reikia patikrinti naudojamoje HA naršyklėje:** viešasis WMS gali vėluoti ar riboti užklausas; nutrūkus ryšiui korta parodo įspėjimą.
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
-- **📍 Mano vieta** – rodo būtent dashboardą atidariusio telefono / planšetės / kompiuterio vietą. Atidarius kortą, naršyklė automatiškai paprašo leidimo nustatyti vietą (jeigu jis dar nesuteiktas); leidus Lietuvos žemėlapyje atsiranda mėlynas pulsuojantis taškas. Mygtukas „Mano vieta“ leidžia bandyti dar kartą. Vietos koordinatės naudojamos tik naršyklėje, nesiunčiamos į Home Assistant serverį. **Reikalinga HTTPS prieiga** arba kita naršyklės laikoma saugia aplinka; vietinis HTTP IP adresas paprastai neveiks.
+- **📍 Vieta žemėlapyje** – numatytuoju automatinio režimo atveju per HTTPS prašoma naršyklės GPS leidimo (mėlynas taškas), o per vietinį HTTP naudojamos **Home Assistant namų koordinatės** iš HA General nustatymų (žalias taškas). Tai **ne serverio IP geolokacija**, o HA savininko įrašyta namų vieta. Taip pat galima pasirinkti miestą (oranžinis taškas) iš 10 apskričių centrų ir Biržų. Vietos šaltinį galima nustatyti kortos UI redaktoriuje arba laikinai perjungti pačios kortos žemėlapio apačioje esančiame meniu. Naršyklės GPS koordinates apdoroja tik naršyklė – jos nesiunčiamos HA serveriui. Tikslus GPS per HTTP IP paprastai neveikia, nes reikalingas HTTPS.
 
-**Versija:** [v0.5.7](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.7) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.8](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.8) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -33,7 +33,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.7`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.8`.
 
 ## Saugumas ir informacija
 
@@ -53,10 +53,12 @@ layer: wind
 animated_wind: true
 wind_particles: medium # low | medium | high
 show_location: true
+location_mode: auto   # auto | browser | home | city
+# location_city: birzai  # only when mode is city
 show_weather_labels: true
 ```
 
-Jei įrenginio vietos nustatymas nepavyksta, korta **nenaudoja serverio adreso** kaip pakaitalo. Vietos rodymą galima išjungti per kortos vizualinį redaktorių. Vietos aptikimui kompiuteryje reikia įjungtų sistemos vietos nustatymo paslaugų; telefonu dažniausiai tiksliau nustato GPS. Vietos žymeklis rodomas tik Lietuvos žemėlapio ribose.
+`location_mode: auto`: per HTTPS pirmiausia rodo naršyklės GPS, o jei jis neprieinamas – HA namų vietą; per HTTP iš karto rodo HA namų vietą. `location_mode: home` visada rodo HA namų vietą; `location_mode: browser` naudoja tik GPS (HTTPS), o `location_mode: city` naudoja `location_city` nustatytą miestą. Namų koordinatės skaitomos iš **Home Assistant → Settings → System → General**. Vietos rodymą galima išjungti redaktoriuje (`show_location: false`). Žymeklis matomas tik žemėlapio ribose.
 
 ### Debesų sluoksnio pavyzdys
 
@@ -175,7 +177,7 @@ animated_wind: true
 
 Po atnaujinimo verta patikrinti našumą tikrame kompiuteryje, telefone ir senesnėje planšetėje. Automatiniai testai patikrina logiką, ne realius FPS.
 
-### v0.5.7 – modelio paskutinio 15 min intervalo vėjo vidurkis
+### v0.5.8 – modelio paskutinio 15 min intervalo vėjo vidurkis
 
 - Vėjo greitis ir kryptis apskaičiuojami iš dviejų paskutinio prieinamo 15 minučių intervalo **Open-Meteo minutely_15 modelio momentinių** taškų. Greitis yra dviejų reikšmių aritmetinis vidurkis, o kryptis – pagal greitį svertinis kampų vidurkis; ignoruojami būsimi, seni ar trūkstami taškai.
 - Tai **apytikslis modelinis**, ne stoties išmatuotas ar realių pastarųjų 15 min stebėtas, vėjo vidurkis. Modelio laikas gali kiek atsilikti.
@@ -183,4 +185,4 @@ Po atnaujinimo verta patikrinti našumą tikrame kompiuteryje, telefone ir senes
 - Jei patikimų 15 min duomenų nėra, naudojama ankstesnė `current` modelio vėjo reikšmė. Tokiu atveju detalių eilutėje rodoma `modelis dabar`; 15 min žyma neteikiama.
 - Suvidurkintas vėjo greitis ir kryptis naudojami ir dalelių animacijai. Visos **v0.5.5** našumo optimizacijos, įskaitant adaptyvų FPS ir išankstinį vėjo tinklelį, išsaugotos.
 
-Atnaujinti į `v0.5.7`: HACS → LT72 Weather Map → Update, perkrauti Home Assistant ir perkrauti naršyklės kortą (`Ctrl+F5`).
+Atnaujinti į `v0.5.8`: HACS → LT72 Weather Map → Update, perkrauti Home Assistant ir perkrauti naršyklės kortą (`Ctrl+F5`).

@@ -397,6 +397,9 @@ async function testAutomaticBrowserLocation(){
   insecure._regions=paths;
   insecure.setConfig({type:"custom:lt72-weather-map"});
   insecure.connectedCallback();
+  assert(insecure.shadowRoot.innerHTML.includes("HA namų koordinatės nenustatytos"));
+  insecure.setConfig({type:"custom:lt72-weather-map",location_mode:"browser"});
+  insecure._checkExistingLocationPermission();
   assert(insecure.shadowRoot.innerHTML.includes("HTTPS adresas"));
   assert.equal(requests,1,"Insecure HTTP must not start geolocation");
   insecure.disconnectedCallback();

@@ -437,6 +437,49 @@ editor._change("show_zoom",false);
 assert.equal(editor.event.detail.config.show_zoom,false);
 console.log("Map zoom controls, persistent default, shared overlays, drag pan and bounds passed.");
 
+// Regression: geolocation/state updates must not close an open map selector.
+const focusCard=vm.runInContext("new LT72WeatherMapCard()",ctx);
+focusCard._regions=paths;
+focusCard.setConfig({type:"custom:lt72-weather-map",location_mode:"home"});
+focusCard.shadowRoot.activeElement={tagName:"SELECT"};
+const oldCardMarkup=focusCard.shadowRoot.innerHTML;
+focusCard._devicePosition={latitude:54.9,longitude:23.9,accuracy:10};
+focusCard._render();
+assert.equal(focusCard.shadowRoot.innerHTML,oldCardMarkup,"Focused map selector must survive updates");
+assert.equal(focusCard._renderPending,true);
+focusCard.shadowRoot.activeElement=null;
+focusCard._render();
+assert.equal(focusCard._renderPending,false);
+
+// Regression: HA emits hass on every state update, but editor form must remain
+// stable unless the LT72 sensor list (the editor's only hass-dependent field) changes.
+const keepEditor=vm.runInContext("new LT72WeatherMapEditor()",ctx);
+keepEditor.setConfig({type:"custom:lt72-weather-map"});
+keepEditor.hass={states:{
+  "sensor.lt72":{entity_id:"sensor.lt72",attributes:{saltinis:"LT72 Weather Map",friendly_name:"Orų korta"}}
+}};
+const markupBefore=keepEditor.shadowRoot.innerHTML;
+keepEditor.shadowRoot.activeElement={tagName:"SELECT"};
+keepEditor.hass={states:{
+  "sensor.lt72":{entity_id:"sensor.lt72",attributes:{saltinis:"LT72 Weather Map",friendly_name:"Orų korta"}},
+  "sensor.unrelated":{entity_id:"sensor.unrelated",state:"new",attributes:{}}
+}};
+assert.equal(keepEditor.shadowRoot.innerHTML,markupBefore);
+assert.equal(keepEditor._editorPendingRender,false);
+keepEditor.hass={states:{
+  "sensor.lt72":{entity_id:"sensor.lt72",attributes:{saltinis:"LT72 Weather Map",friendly_name:"Nauja korta"}}
+}};
+assert.equal(keepEditor.shadowRoot.innerHTML,markupBefore,"New sensor option waits for selector blur");
+assert.equal(keepEditor._editorPendingRender,true);
+keepEditor.shadowRoot.activeElement=null;
+keepEditor._render();
+assert(keepEditor.shadowRoot.innerHTML.includes("Nauja korta"));
+keepEditor._change("location_mode","city");
+const afterChoice=keepEditor.shadowRoot.innerHTML;
+keepEditor.setConfig(keepEditor.event.detail.config);
+assert.equal(keepEditor.shadowRoot.innerHTML,afterChoice,"Identical config must not rebuild editor");
+console.log("Dropdown focus and stable editor DOM under unrelated HA updates passed.");
+
 // Browser geolocation is requested automatically on first display, but consent
 // stays under the browser's control and denied permissions are never bypassed.
 async function testAutomaticBrowserLocation(){

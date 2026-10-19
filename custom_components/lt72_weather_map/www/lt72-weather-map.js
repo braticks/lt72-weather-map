@@ -952,6 +952,14 @@ class LT72WeatherMapCard extends HTMLElement {
        "HA namų koordinatės nenustatytos – pasirinkite miestą.":"")
    );
    const animateWind=showWind&&this._config.animated_wind!==false;
+   const zoomControls=this._config.show_zoom===false||!this._regions?"": 
+     '<div class="zoom-controls" role="group" aria-label="Žemėlapio mastelis">'+
+     '<button type="button" data-map-zoom="out" aria-label="Atitolinti" title="Atitolinti"'+
+       (this._mapZoom<=1?' disabled':'')+'>−</button>'+
+     '<button type="button" data-map-zoom="reset" aria-label="Atkurti Lietuvos vaizdą" title="Atkurti visą vaizdą"'+
+       (this._mapZoom<=1?' disabled':'')+'>'+this._mapZoom+'×</button>'+
+     '<button type="button" data-map-zoom="in" aria-label="Priartinti" title="Priartinti"'+
+       (this._mapZoom>=4?' disabled':'')+'>+</button></div>';
    const buttons=WMAP_MODES.map(m=>
      '<button class="mode '+(mode===m[0]?'active':'')+'" data-mode="'+m[0]+
      '" type="button">'+WMAP_ESC(m[1])+'</button>').join("");
@@ -1036,6 +1044,12 @@ class LT72WeatherMapCard extends HTMLElement {
      '.mode{border:1px solid var(--divider-color,#9ca3af);color:var(--primary-text-color);background:var(--secondary-background-color,#f3f4f6);font:inherit;font-size:12px;padding:7px 9px;border-radius:8px;cursor:pointer}',
      '.mode.active{border-color:var(--primary-color,#2196f3);box-shadow:inset 0 0 0 1px var(--primary-color,#2196f3);font-weight:700}',
      '.map{position:relative;background:var(--wmap-sea,#7b858c);border-radius:10px;overflow:hidden;isolation:isolate}',
+     '.map-viewport{position:relative;width:100%;max-width:805px;margin:0 auto;aspect-ratio:760 / 444;overflow:hidden;touch-action:pan-y}',
+     '.map-viewport.zoomed{cursor:grab;touch-action:none}.map-viewport.zoomed:active{cursor:grabbing}',
+     '.map-scene{position:absolute;inset:0;transform-origin:0 0;will-change:transform}',
+     '.zoom-controls{position:absolute;right:9px;top:9px;z-index:5;display:flex;gap:3px;padding:3px;background:var(--card-background-color,#fff);box-shadow:0 1px 4px #0004;border:1px solid var(--divider-color);border-radius:9px}',
+     '.zoom-controls button{font:600 14px Roboto,Arial,sans-serif;background:transparent;color:var(--primary-text-color);border:0;border-radius:6px;min-height:30px;min-width:30px;padding:0 5px;cursor:pointer}',
+     '.zoom-controls button:disabled{cursor:default;opacity:.4}',
      '.satellite-layer{pointer-events:none}',
      '.neighbor{fill:none;stroke:var(--wmap-border);stroke-width:1.35;stroke-opacity:.48;pointer-events:none}',
      '.neighbor-label{font:500 13px Roboto,Arial,sans-serif;fill:var(--wmap-names);stroke:var(--wmap-land);stroke-width:2px;paint-order:stroke;pointer-events:none}',
@@ -1046,7 +1060,7 @@ class LT72WeatherMapCard extends HTMLElement {
      '.location-picker select{font:inherit;color:inherit;background:transparent;border:0;max-width:100%;min-width:0;cursor:pointer}',
      '.gps-pulse{transform-box:fill-box;transform-origin:center;animation:gpsPulse 2s ease-in-out infinite}',
      '@keyframes gpsPulse{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:.85;transform:scale(1.25)}}',
-     '.map svg{width:100%;height:auto;display:block;max-height:470px}',
+     '.map-scene svg{width:100%;height:100%;display:block;max-height:none}',
      '.county-label{font:600 13px Roboto,Arial,sans-serif;fill:var(--wmap-label);paint-order:stroke;stroke:var(--wmap-land);stroke-width:3px;stroke-linejoin:round;pointer-events:none}',
      '.city-temperature{pointer-events:none;filter:drop-shadow(0 1px 1px #0005)}',
      '.city-label{font:600 13px Roboto,Arial,sans-serif;fill:#fff;stroke:#1b2939;stroke-width:2.5px;paint-order:stroke;stroke-linejoin:round}',
@@ -1088,13 +1102,16 @@ class LT72WeatherMapCard extends HTMLElement {
      '<div class="map">',
      this._error?'<div class="missing">'+WMAP_ESC(this._error)+'</div>':
      !this._regions?'<div class="missing">Įkeliamas Lietuvos žemėlapis...</div>':
-       '<svg viewBox="0 0 760 444" aria-label="LT72 pavojaus ir orų žemėlapis" role="img">'+
-         '<rect x="0" y="0" width="760" height="444" fill="var(--wmap-sea)"></rect>'+
-         neighborBase+satelliteImage+images+
-         '<g class="neighbor-outlines">'+neighbors+'</g>'+
-         countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+'</svg>'+
-         (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':""),
-     locationButton,locationPicker,
+       '<div class="map-viewport'+(this._mapZoom>1?' zoomed':'')+'">'+
+         '<div class="map-scene" style="transform:'+this._mapZoomStyle()+'">'+
+           '<svg viewBox="0 0 760 444" aria-label="LT72 pavojaus ir orų žemėlapis" role="img">'+
+             '<rect x="0" y="0" width="760" height="444" fill="var(--wmap-sea)"></rect>'+
+             neighborBase+satelliteImage+images+
+             '<g class="neighbor-outlines">'+neighbors+'</g>'+
+             countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+'</svg>'+
+           (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':"")+
+         '</div></div>',
+     locationButton,locationPicker,zoomControls,
      (mapMissing?'<div class="overlay-alert">⚠ '+WMAP_ESC(mode==="radar"?
        "Radaro duomenys nepasiekiami":"Orų prognozės nepasiekiamos")+'</div>':""),
      '</div>',
@@ -1116,6 +1133,7 @@ class LT72WeatherMapCard extends HTMLElement {
    root.querySelectorAll("[data-location-choice]").forEach(node=>{
      node.addEventListener("change",()=>this._selectLocation(node.value));
    });
+   this._attachMapNavigation();
    if(animateWind&&this._regions)this._startWindAnimation(weather);
    root.querySelectorAll("[data-mode]").forEach(node=>{
      node.addEventListener("click",()=>{
@@ -1195,6 +1213,12 @@ class LT72WeatherMapEditor extends HTMLElement {
        '<option value="'+id+'"'+((current.map_theme||"gray")===id?' selected':'')+'>'+
        WMAP_ESC(name)+'</option>'),
      '</select></label>',
+     '<h4>Žemėlapio priartinimas</h4>',
+     '<label class="field"><span>Pradinis priartinimas</span><select data-select="default_zoom">',
+     ...WMAP_MAP_ZOOM_STEPS.map(z=>
+       '<option value="'+z+'"'+(wmapClampMapZoom(current.default_zoom)===z?' selected':'')+'>'+z+'×</option>'),
+     '</select></label>',
+     '<p>Žemėlapio + / − / mastelio mygtukai rodomi, kai įjungtas „Rodyti žemėlapio priartinimo mygtukus“. Priartintą žemėlapį galima slinkti pirštu arba pele.</p>',
      '<h4>Mano vieta žemėlapyje</h4>',
      '<label class="field"><span>Vietos šaltinis</span><select data-select="location_mode">',
      ...WMAP_LOCATION_MODES.map(([id,name])=>

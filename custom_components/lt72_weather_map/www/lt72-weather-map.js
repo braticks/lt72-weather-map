@@ -906,7 +906,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const alertLevel=WMAP_LEVELS[alertCode];
    const mode=this._mode||"radar";
    const showSatellite=mode==="satellite"||mode==="all";
-   const showRadar=(mode==="radar"||mode==="all")&&radarReady;
+   const showRadar=(mode==="radar"||mode==="snow"||mode==="all")&&radarReady;
    const showWind=(mode==="wind"||mode==="all")&&weatherReady;
    const showSnow=(mode==="snow"||mode==="radar"||mode==="all")&&weatherReady;
    const showThunder=(mode==="snow"||mode==="radar"||mode==="all")&&weatherReady;
@@ -1121,7 +1121,7 @@ class LT72WeatherMapCard extends HTMLElement {
        '<strong>'+WMAP_ESC(region[1])+' apskritis</strong>'+
        '<span class="status">'+WMAP_ESC(alertLevel[0])+'</span></div>'+
        '<div class="note">'+WMAP_ESC(msg)+'</div>'+weatherInfo+'</div>':"";
-   const precipitationGuide=this._show("show_precip_legend")&&(mode==="radar"||mode==="all")?
+   const precipitationGuide=this._show("show_precip_legend")&&(mode==="radar"||mode==="snow"||mode==="all")?
      '<div class="precip-guide"><strong>🌧️ Radaro krituliai:</strong>'+
        '<span class="rain-gradient"></span><span>Silpnesni → stipresni</span>'+
        '<span class="snow-chip">❄️</span><span>Žydra / balzgana – galimas sniegas</span>'+
@@ -1140,7 +1140,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const frameTime=chosenFrame?new Date(chosenFrame.time*1000).toLocaleString(
      this._hass?.locale?.language||"lt-LT",{hour:"2-digit",minute:"2-digit",day:"numeric",month:"short"}
    ):"Nėra duomenų";
-   const timeline=this._show("show_timeline")&&(mode==="radar"||mode==="all")?
+   const timeline=this._show("show_timeline")&&(mode==="radar"||mode==="snow"||mode==="all")?
      '<div class="timeline"><button type="button" data-frame="-1" '+(!radarReady||this._radarIndex===0?'disabled':'')+
      '>‹</button><span>Radaras: '+WMAP_ESC(frameTime)+' • praeities stebėjimas</span>'+
      '<button type="button" data-frame="1" '+(!radarReady||this._radarIndex>=frames.length-1?'disabled':'')+
@@ -1162,7 +1162,7 @@ class LT72WeatherMapCard extends HTMLElement {
      '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> / <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener noreferrer">MapTiler</a> · ':'')+'Made with <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>'+
      ' · <a href="https://lt72.lt/" target="_blank" rel="noopener noreferrer">LT72</a>'+
      ' · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>'+
-     ((mode==="radar"||mode==="all")?
+     ((mode==="radar"||mode==="snow"||mode==="all")?
        ' · Weather data by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>':'')+
      (showSatellite?' · Palydovas © <a href="https://www.eumetsat.int/" target="_blank" rel="noopener noreferrer">EUMETSAT</a>'+
        (satelliteStyle==="geocolour"?'/NASA':""):'')+

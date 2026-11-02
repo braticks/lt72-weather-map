@@ -185,8 +185,9 @@ function wmapTileBounds(proj,view){
          ymin:Math.floor((view.ymin-offsetY)/tileH)-1,
          ymax:Math.ceil((view.ymax-offsetY)/tileH)+1};
 }
-// Community-rendered OSM France tiles; request visible tiles only and show both credits.
-function wmapDetailTiles(proj=wmapProjection(),view=null,zoom=1){
+// Community-rendered MapTiler tiles; request visible tiles only and show both credits.
+function wmapDetailTiles(proj=wmapProjection(),view=null,zoom=1,key="",theme="gray"){
+ if(!key||typeof key!=="string")return [];
  const z=Math.min(9,7+Math.floor(Math.log2(Math.max(1,Number(zoom)||1))));
  const factor=2**(z-WMAP_ZOOM);
  const {xmin,xmax,ymin,ymax}=wmapTileBounds(proj,view);
@@ -197,7 +198,7 @@ function wmapDetailTiles(proj=wmapProjection(),view=null,zoom=1){
      const [px,py,w,h]=proj.tileRect(x/factor,y/factor);
      if(view&&(px+w/factor<view.xmin||py+h/factor<view.ymin||
        px>view.xmax||py>view.ymax))continue;
-     tiles.push({url:"https://a.tile.openstreetmap.fr/osmfr/"+z+"/"+x+"/"+y+".png",
+     tiles.push({url:"https://api.maptiler.com/maps/"+(theme==="dark"?"streets-v4-dark":"streets-v4")+"/256/"+z+"/"+x+"/"+y+".png?key="+encodeURIComponent(key),
        x:px,y:py,w:w/factor,h:h/factor});
    }
  }
@@ -929,8 +930,9 @@ class LT72WeatherMapCard extends HTMLElement {
    }
    const neighbors=this._config.show_neighbor_borders!==false&&this._neighbors?
      this._neighbors.map(c=>'<path class="neighbor" d="'+c.d+'"></path>').join("") : "";
-   const detailedMap=this._config.show_map_details!==false;
-   const detailTiles=detailedMap?wmapDetailTiles(projection,tileView,this._mapZoom).map(t=>
+   const detailedMap=this._config.show_map_details!==false&&
+      !!this._config.maptiler_api_key;
+   const detailTiles=detailedMap?wmapDetailTiles(projection,tileView,this._mapZoom,this._config.maptiler_api_key,this._config.map_theme).map(t=>
      '<image class="detail-tile" href="'+WMAP_ESC(t.url)+'" x="'+t.x.toFixed(2)+
      '" y="'+t.y.toFixed(2)+'" width="'+t.w.toFixed(2)+
      '" height="'+t.h.toFixed(2)+'" preserveAspectRatio="none"></image>').join(""):"";
@@ -1149,9 +1151,9 @@ class LT72WeatherMapCard extends HTMLElement {
      '</div></div>':"";
    const toolbar=this._show("show_toolbar")?'<div class="toolbar">'+buttons+'</div>':"";
    const osmCredit=detailedMap?
-     '<div class="osm-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> / <a href="https://openstreetmap.fr/" target="_blank" rel="noopener noreferrer">OSM France</a></div>':"";
+     '<div class="osm-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> / <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener noreferrer">MapTiler</a></div>':"";
    const attribution='<div class="credits">'+(detailedMap?
-     '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> / <a href="https://openstreetmap.fr/" target="_blank" rel="noopener noreferrer">OSM France</a> · ':'')+'Made with <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>'+
+     '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> / <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener noreferrer">MapTiler</a> · ':'')+'Made with <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>'+
      ' · <a href="https://lt72.lt/" target="_blank" rel="noopener noreferrer">LT72</a>'+
      ' · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>'+
      ((mode==="radar"||mode==="all")?
@@ -1188,7 +1190,7 @@ class LT72WeatherMapCard extends HTMLElement {
      '.satellite-layer{pointer-events:none}',
      '.detail-tile{pointer-events:none}',
      // Filter base map tiles only, keeping radar and warnings at full color.
-     '.map[data-map-theme="dark"] .detail-tile{filter:brightness(.37) contrast(1.25) saturate(.85)}',
+     '.map[data-map-theme="dark"] .detail-tile{filter:none}',
      '.osm-attribution{position:absolute;right:5px;top:5px;z-index:3;padding:2px 4px;border-radius:3px;font:9px Roboto,Arial,sans-serif;background:rgba(20,31,43,.78);color:#fff;pointer-events:auto}',
      '.osm-attribution a{color:#fff;text-decoration:underline}',
      '.neighbor{fill:none;stroke:var(--wmap-border);stroke-width:1.35;stroke-opacity:.48;pointer-events:none}',
@@ -1401,6 +1403,8 @@ class LT72WeatherMapEditor extends HTMLElement {
        '<option value="'+id+'"'+((current.map_aspect||"original")===id?' selected':'')+'>'+
        WMAP_ESC(label)+'</option>'),
      '</select></label>',
+     '<label class="field"><span>MapTiler API raktas (detaliam žemėlapiui)</span><input type="text" data-setting-text="maptiler_api_key" value="'+WMAP_ESC(current.maptiler_api_key||"")+'" placeholder="MapTiler API key"></label>',
+     '<p>MapTiler turi atskiras naudojimo sąlygas ir kvotas. Be rakto rodoma bazinė geografija ir orų sluoksniai, o ne užblokuotos žemėlapio plytelės.</p>',
      '<label class="field"><span>Žemėlapio tema</span><select data-select="map_theme">',
      ...WMAP_MAP_THEMES.map(([id,name])=>
        '<option value="'+id+'"'+((current.map_theme||"gray")===id?' selected':'')+'>'+

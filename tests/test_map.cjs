@@ -277,7 +277,9 @@ assert(cleanBottom.includes('<details class="source-details">'),"Sources remain 
 assert(cleanBottom.includes("ⓘ Šaltiniai"));
 card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:true,show_sources:true});
 assert(card.shadowRoot.innerHTML.includes('<div class="sat-guide">'));
-assert(card.shadowRoot.innerHTML.includes('<div class="credits">Made with'));
+assert(card.shadowRoot.innerHTML.includes('OpenStreetMap contributors'));
+assert(card.shadowRoot.innerHTML.includes('tile.openstreetmap.org/7/'));
+assert(!card.shadowRoot.innerHTML.includes('class="zoom-controls"'));;
 assert(!card.shadowRoot.innerHTML.includes('<details class="source-details">'));
 assert(editor.shadowRoot.innerHTML.includes('data-setting="show_satellite_info"'));
 assert(editor.shadowRoot.innerHTML.includes('data-setting="show_sources"'));

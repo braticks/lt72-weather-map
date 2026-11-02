@@ -185,9 +185,10 @@ function wmapTileBounds(proj,view){
          ymin:Math.floor((view.ymin-offsetY)/tileH)-1,
          ymax:Math.ceil((view.ymax-offsetY)/tileH)+1};
 }
-// Browser-cached OpenStreetMap tiles follow pan worldwide; correct attribution displayed.
-function wmapDetailTiles(proj=wmapProjection(),view=null){
- const z=7,factor=2**(z-WMAP_ZOOM);
+// Community-rendered OSM France tiles; request visible tiles only and show both credits.
+function wmapDetailTiles(proj=wmapProjection(),view=null,zoom=1){
+ const z=Math.min(9,7+Math.floor(Math.log2(Math.max(1,Number(zoom)||1))));
+ const factor=2**(z-WMAP_ZOOM);
  const {xmin,xmax,ymin,ymax}=wmapTileBounds(proj,view);
  const tiles=[];
  for(let x=xmin*factor-1;x<=(xmax+1)*factor+1;x++){
@@ -196,7 +197,7 @@ function wmapDetailTiles(proj=wmapProjection(),view=null){
      const [px,py,w,h]=proj.tileRect(x/factor,y/factor);
      if(view&&(px+w/factor<view.xmin||py+h/factor<view.ymin||
        px>view.xmax||py>view.ymax))continue;
-     tiles.push({url:"https://tile.openstreetmap.org/"+z+"/"+x+"/"+y+".png",
+     tiles.push({url:"https://a.tile.openstreetmap.fr/osmfr/"+z+"/"+x+"/"+y+".png",
        x:px,y:py,w:w/factor,h:h/factor});
    }
  }
@@ -906,7 +907,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const chosenFrame=frames[this._radarIndex]||null;
    const projection=wmapProjection();
    const visibleView=this._mapBounds();
-   const tileView=this._mapBounds(0.45);
+   const tileView=this._mapBounds(0.08);
    const theme=WMAP_THEME_COLORS[this._config.map_theme]||WMAP_THEME_COLORS.gray;
    const currentBucket=Math.floor(Date.now()/900000);
    if(this._satelliteBucket!==currentBucket){
@@ -929,7 +930,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const neighbors=this._config.show_neighbor_borders!==false&&this._neighbors?
      this._neighbors.map(c=>'<path class="neighbor" d="'+c.d+'"></path>').join("") : "";
    const detailedMap=this._config.show_map_details!==false;
-   const detailTiles=detailedMap?wmapDetailTiles(projection,tileView).map(t=>
+   const detailTiles=detailedMap?wmapDetailTiles(projection,tileView,this._mapZoom).map(t=>
      '<image class="detail-tile" href="'+WMAP_ESC(t.url)+'" x="'+t.x.toFixed(2)+
      '" y="'+t.y.toFixed(2)+'" width="'+t.w.toFixed(2)+
      '" height="'+t.h.toFixed(2)+'" preserveAspectRatio="none"></image>').join(""):"";
@@ -1148,9 +1149,9 @@ class LT72WeatherMapCard extends HTMLElement {
      '</div></div>':"";
    const toolbar=this._show("show_toolbar")?'<div class="toolbar">'+buttons+'</div>':"";
    const osmCredit=detailedMap?
-     '<div class="osm-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></div>':"";
+     '<div class="osm-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> / <a href="https://openstreetmap.fr/" target="_blank" rel="noopener noreferrer">OSM France</a></div>':"";
    const attribution='<div class="credits">'+(detailedMap?
-     '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · ':'')+'Made with <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>'+
+     '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> / <a href="https://openstreetmap.fr/" target="_blank" rel="noopener noreferrer">OSM France</a> · ':'')+'Made with <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>'+
      ' · <a href="https://lt72.lt/" target="_blank" rel="noopener noreferrer">LT72</a>'+
      ' · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>'+
      ((mode==="radar"||mode==="all")?

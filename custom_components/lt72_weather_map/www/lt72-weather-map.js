@@ -282,7 +282,7 @@ function wmapPerformancePreset(mode,cores=8,memory=8) {
 }
 // Build wind vector samples and precompute a small grid once per sensor update.
 // Each particle then reads only 4 cached grid cells per frame.
-function wmapBuildWindGrid(samples,step=28){
+function wmapBuildWindGrid(samples,step=28,bounds={xmin:0,xmax:760,ymin:0,ymax:444}){
  const projection=wmapProjection();
  const stations=WMAP_REGIONS.map(r=>{
    const sample=samples?.[r[0]];
@@ -292,9 +292,10 @@ function wmapBuildWindGrid(samples,step=28){
    const angle=(direction+180)*Math.PI/180;
    return {x,y,vx:Math.sin(angle)*speed,vy:-Math.cos(angle)*speed};
  }).filter(Boolean);
- const cols=Math.ceil(760/step)+1,rows=Math.ceil(444/step)+1,values=[];
+ const cols=Math.ceil((bounds.xmax-bounds.xmin)/step)+1;
+ const rows=Math.ceil((bounds.ymax-bounds.ymin)/step)+1,values=[];
  for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
-   const x=gx*step,y=gy*step;
+   const x=bounds.xmin+gx*step,y=bounds.ymin+gy*step;
    let vx=0,vy=0,total=0;
    for(const p of stations){
      const dist2=(p.x-x)**2+(p.y-y)**2;
@@ -303,12 +304,12 @@ function wmapBuildWindGrid(samples,step=28){
    }
    values.push(total?[vx/total,vy/total]:[0,0]);
  }
- return {cols,rows,step,values};
+ return {cols,rows,step,values,xmin:bounds.xmin,ymin:bounds.ymin};
 }
 function wmapSampleWindGrid(grid,x,y){
  if(!grid?.values?.length)return null;
- const gx=Math.min(grid.cols-1.000001,Math.max(0,x/grid.step));
- const gy=Math.min(grid.rows-1.000001,Math.max(0,y/grid.step));
+ const gx=Math.min(grid.cols-1.000001,Math.max(0,(x-(grid.xmin||0))/grid.step));
+ const gy=Math.min(grid.rows-1.000001,Math.max(0,(y-(grid.ymin||0))/grid.step));
  const ix=Math.floor(gx),iy=Math.floor(gy),fx=gx-ix,fy=gy-iy,n=iy*grid.cols+ix;
  const a=grid.values[n],b=grid.values[n+1],c=grid.values[n+grid.cols],d=grid.values[n+grid.cols+1];
  if(!a||!b||!c||!d)return null;
@@ -362,13 +363,20 @@ function wmapLocationMarker(coords, projection=wmapProjection(), view=null) {
 }
 // EUMETView infrared band is day/night consistent. GeoColour alternates
 // daytime true-colour and a nighttime IR + NASA basemap; keep it optional.
-function wmapSatelliteUrl(proj=wmapProjection(),now=Date.now(),style="ir") {
+function wmapSatelliteUrl(proj=wmapProjection(),now=Date.now(),style="ir",view=null) {
  const layer=style==="geocolour"?"mtg_fd:rgb_geocolour":"mtg_fd:ir105_hrfi";
+ const area=view||{xmin:0,xmax:760,ymin:0,ymax:444};
+ const [west,south,east,north]=proj.bbox3857;
+ const metresX=(east-west)/760,metresY=(north-south)/444;
+ const bbox=[west+area.xmin*metresX,north-area.ymax*metresY,
+   west+area.xmax*metresX,north-area.ymin*metresY];
  const params=new URLSearchParams({
    SERVICE:"WMS",VERSION:"1.3.0",REQUEST:"GetMap",
    LAYERS:layer,STYLES:"",
-   CRS:"EPSG:3857",BBOX:proj.bbox3857.map(v=>v.toFixed(1)).join(","),
-   WIDTH:"760",HEIGHT:"444",FORMAT:"image/png",TRANSPARENT:"true",
+   CRS:"EPSG:3857",BBOX:bbox.map(v=>v.toFixed(1)).join(","),
+   WIDTH:String(Math.round(area.xmax-area.xmin)),
+   HEIGHT:String(Math.round(area.ymax-area.ymin)),
+   FORMAT:"image/png",TRANSPARENT:"true",
    _t:String(Math.floor(now/900000)) // Refresh the WMS image roughly every 15 min.
  });
  return "https://view.eumetsat.int/geoserver/wms?"+params.toString();
@@ -520,8 +528,10 @@ class LT72WeatherMapCard extends HTMLElement {
  }
  _mapZoomStyle(){
    const z=this._mapZoom;
+   const height=760/wmapAspectRatio(this._config.map_aspect);
+   const top=222-height/2;
    const tx=(380-z*this._mapCenter.x)/760*100;
-   const ty=(222-z*this._mapCenter.y)/444*100;
+   const ty=(222-z*this._mapCenter.y+(z-1)*top)/height*100;
    return "translate("+tx.toFixed(5)+"%,"+ty.toFixed(5)+"%) scale("+z+")";
  }
  _refreshMapZoom(){
@@ -808,14 +818,18 @@ class LT72WeatherMapCard extends HTMLElement {
    const cores=typeof navigator!=="undefined"?navigator.hardwareConcurrency:8;
    const memory=typeof navigator!=="undefined"?navigator.deviceMemory:8;
    const preset=wmapPerformancePreset(this._config.performance_mode,cores,memory);
-   const windGrid=wmapBuildWindGrid(samples);
+   const sceneHeight=760/wmapAspectRatio(this._config.map_aspect);
+   const sceneTop=222-sceneHeight/2,sceneBottom=sceneTop+sceneHeight;
+   const windGrid=wmapBuildWindGrid(samples,28,{
+     xmin:0,xmax:760,ymin:sceneTop,ymax:sceneBottom
+   });
    const appearance=wmapWindStyle(this._config.map_theme,this._config.wind_visibility);
    const counts={low:75,medium:140,high:220};
    const count=Math.max(24,Math.round((counts[this._config.wind_particles]||140)*appearance.density*preset.density));
    context.lineCap="round";
    context.shadowColor="rgba("+appearance.shadow+",0.52)";
    context.shadowBlur=preset.blur?appearance.blur:0;
-   const seed=()=>({x:Math.random()*760,y:Math.random()*444,
+   const seed=()=>({x:Math.random()*760,y:sceneTop+Math.random()*sceneHeight,
      age:Math.random()*110,trail:[]});
    this._windParticles=Array.from({length:count},seed);
    const animate=(time)=>{
@@ -827,7 +841,7 @@ class LT72WeatherMapCard extends HTMLElement {
      }
      const dt=this._windLastTime?Math.min(0.10,(time-this._windLastTime)/1000):1/preset.fps;
      this._windLastTime=time;
-     context.clearRect(0,0,760,444);
+     context.clearRect(0,0,760,Math.ceil(sceneHeight));
      for(let i=0;i<this._windParticles.length;i++){
        let p=this._windParticles[i];
        const vector=wmapSampleWindGrid(windGrid,p.x,p.y);
@@ -838,7 +852,7 @@ class LT72WeatherMapCard extends HTMLElement {
        p.trail.push([p.x,p.y]);
        if(p.trail.length>motion.trailLength)p.trail.shift();
        p.age++;
-       if(p.age>85||p.x<0||p.y<0||p.x>760||p.y>444){
+       if(p.age>85||p.x<0||p.y<sceneTop||p.x>760||p.y>sceneBottom){
          this._windParticles[i]=seed();
          continue;
        }
@@ -847,8 +861,8 @@ class LT72WeatherMapCard extends HTMLElement {
          context.strokeStyle="rgba("+appearance.ink+","+alpha.toFixed(3)+")";
          context.lineWidth=Math.max(appearance.width,motion.lineWidth*appearance.width);
          context.beginPath();
-         context.moveTo(p.trail[j-1][0],p.trail[j-1][1]);
-         context.lineTo(p.trail[j][0],p.trail[j][1]);
+         context.moveTo(p.trail[j-1][0],p.trail[j-1][1]-sceneTop);
+         context.lineTo(p.trail[j][0],p.trail[j][1]-sceneTop);
          context.stroke();
        }
      }
@@ -912,6 +926,10 @@ class LT72WeatherMapCard extends HTMLElement {
    const showThunder=(mode==="snow"||mode==="radar"||mode==="all")&&weatherReady;
    const chosenFrame=frames[this._radarIndex]||null;
    const projection=wmapProjection();
+   // The SVG and wind canvas share the selected aspect, not a fixed 760:444 scene.
+   const sceneView=wmapViewBounds({x:380,y:222},1,this._config.map_aspect);
+   const sceneTop=Number(sceneView.ymin.toFixed(2));
+   const sceneHeight=Number((sceneView.ymax-sceneView.ymin).toFixed(2));
    const visibleView=this._mapBounds();
    const tileView=this._mapBounds(0.08);
    const theme=WMAP_THEME_COLORS[this._config.map_theme]||WMAP_THEME_COLORS.gray;
@@ -923,8 +941,8 @@ class LT72WeatherMapCard extends HTMLElement {
    const satelliteStyle=this._config.satellite_style==="geocolour"?"geocolour":"ir";
    const satelliteOpacity=wmapSatelliteOpacity(this._config.satellite_opacity);
    const satelliteImage=showSatellite&&!this._satelliteError?
-     '<image class="satellite-layer" href="'+WMAP_ESC(wmapSatelliteUrl(projection,Date.now(),satelliteStyle))+
-     '" x="0" y="0" width="760" height="444" preserveAspectRatio="none" opacity="'+satelliteOpacity+
+     '<image class="satellite-layer" href="'+WMAP_ESC(wmapSatelliteUrl(projection,Date.now(),satelliteStyle,sceneView))+
+     '" x="0" y="'+sceneTop+'" width="760" height="'+sceneHeight+'" preserveAspectRatio="none" opacity="'+satelliteOpacity+
      '" style="mix-blend-mode:'+(satelliteStyle==="ir"?"screen":"normal")+'"></image>' : "";
    let images="";
    if(showRadar&&chosenFrame){
@@ -1175,7 +1193,7 @@ class LT72WeatherMapCard extends HTMLElement {
      'Pilka = nepasiekiama. Radaras rodo stebėtus kritulius, o palydovas – debesų dangą; vėjas, snaigės ir ⚡ perkūnijos žymekliai – modelio prognozė, NE tikri žaibo smūgiai. '+
      'Pavojaus metu vadovaukitės oficialiais LT-Alert pranešimais.</div>':"";
    const mapMissing=(mode==="radar"&&!radarReady)||
-     ((mode==="wind"||mode==="snow")&&!weatherReady);
+     ((mode==="wind"||mode==="snow"||mode==="all")&&!weatherReady);
    root.innerHTML=[
      '<style>',
      ':host{display:block;color:var(--primary-text-color);font-family:var(--primary-font-family,Roboto,Arial,sans-serif)}',
@@ -1188,8 +1206,8 @@ class LT72WeatherMapCard extends HTMLElement {
      '.map{position:relative;background:var(--wmap-sea,#7b858c);border-radius:10px;overflow:hidden;isolation:isolate}',
      '.map-viewport{position:relative;width:100%;max-width:805px;margin:0 auto;aspect-ratio:var(--wmap-aspect,760 / 444);overflow:hidden;touch-action:none;cursor:grab}',
      '.map-viewport:active{cursor:grabbing}',
-     '.map-scene-holder{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}',
-     '.map-scene{position:relative;width:100%;height:auto;aspect-ratio:760 / 444;transform-origin:0 0;will-change:transform;pointer-events:auto}',
+     '.map-scene-holder{position:absolute;inset:0;pointer-events:none}',
+     '.map-scene{position:absolute;inset:0;width:100%;height:100%;transform-origin:0 0;will-change:transform;pointer-events:auto}',
      '.zoom-controls{position:absolute;right:9px;top:9px;z-index:5;display:flex;gap:3px;padding:3px;background:var(--card-background-color,#fff);box-shadow:0 1px 4px #0004;border:1px solid var(--divider-color);border-radius:9px}',
      '.zoom-controls button{font:600 14px Roboto,Arial,sans-serif;background:transparent;color:var(--primary-text-color);border:0;border-radius:6px;min-height:30px;min-width:30px;padding:0 5px;cursor:pointer}',
      '.zoom-controls button:disabled{cursor:default;opacity:.4}',
@@ -1261,16 +1279,16 @@ class LT72WeatherMapCard extends HTMLElement {
      !this._regions?'<div class="missing">Įkeliamas Lietuvos žemėlapis...</div>':
        '<div class="map-viewport'+(this._mapZoom>1?' zoomed':'')+'" style="--wmap-aspect:'+wmapAspectValue(this._config.map_aspect)+'">'+
          '<div class="map-scene-holder"><div class="map-scene" style="transform:'+this._mapZoomStyle()+'">'+
-           '<svg viewBox="0 0 760 444" aria-label="LT72 pavojaus ir orų žemėlapis" role="img">'+
-             '<rect x="0" y="0" width="760" height="444" fill="var(--wmap-sea)"></rect>'+
+           '<svg viewBox="0 '+sceneTop+' 760 '+sceneHeight+'" aria-label="LT72 pavojaus ir orų žemėlapis" role="img">'+
+             '<rect x="0" y="'+sceneTop+'" width="760" height="'+sceneHeight+'" fill="var(--wmap-sea)"></rect>'+
              neighborBase+detailTiles+satelliteImage+images+
              '<g class="neighbor-outlines">'+neighbors+'</g>'+
              countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+inspectMarker+'</svg>'+
-           (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':"")+
+           (animateWind?'<canvas class="wind-canvas" width="760" height="'+Math.round(sceneHeight)+'" aria-hidden="true"></canvas>':"")+
          '</div></div></div>',
      locationButton,recenterButton,locationPicker,zoomControls,osmCredit,
      (mapMissing?'<div class="overlay-alert">⚠ '+WMAP_ESC(mode==="radar"?
-       "Radaro duomenys nepasiekiami":"Orų prognozės nepasiekiamos")+'</div>':""),
+       "Radaro duomenys nepasiekiami":"Orų prognozės nepasiekiamos – vėjo animacija sustabdyta")+'</div>':""),
      '</div>',
      (locationNote?'<div class="geo-note">'+WMAP_ESC(locationNote)+'</div>':""),
      inspectText,

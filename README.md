@@ -13,12 +13,12 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - **Sniegas** – Open-Meteo prognozuojamas snygis. Sniego prognozė pagal apskritis nėra tas pats, kas radaro sniego spalvinimas.
 - **Palydovas** – [EUMETSAT EUMETView](https://view.eumetsat.int/) WMS vaizdas tame pačiame geografiniame žemėlapyje. Nuo v0.5.1 numatytasis variantas – **IR 10,5 µm**, vienodai naudojamas dieną ir naktį; neprivalomas GeoColour dienos ir nakties kompozitas prieinamas per UI. Debesų vaizdo ryškumas keičiamas UI. **Palydovo vaizdo realų atvaizdavimą reikia patikrinti naudojamoje HA naršyklėje:** viešasis WMS gali vėluoti ar riboti užklausas; nutrūkus ryšiui korta parodo įspėjimą.
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
-- **🗺️ Navigacija ir formatas** – pasirinkite originalų, 16:9, 4:3, **1:1 kvadratinį** arba 3:4 formatą. Žemėlapį galima slinkti **ir nepritraukus**, taip pat už Lietuvos ribų. Radarui ir detaliam OpenStreetMap pagrindui dinamiškai įkeliamos matomos plytelės. Mastelis 1–4× (dvigubas spustelėjimas / Ctrl + ratukas); mastelio mygtukai paslėpti.
+- **🗺️ Navigacija ir formatas** – pasirinkite originalų, 16:9, 4:3, **1:1 kvadratinį** arba 3:4 formatą. Žemėlapį galima slinkti **ir nepritraukus**, taip pat už Lietuvos ribų. Radarui ir detaliam žemėlapio pagrindui naudojamos tik matomos MapTiler plytelės su atskiru API raktu. Mastelis 1–4× (dvigubas spustelėjimas / Ctrl + ratukas); mastelio mygtukai paslėpti.
 - **📍 Esama vieta** – naudojamas įrenginio GPS (tik HTTPS ir gavus leidimą), o jam neveikiant – HA namų koordinatės arba `zone.home`. **„Mano vieta“** mygtukas centruoja žemėlapį ties pasirinkta vieta. Tai nėra IP geolokacija.
 
-**v0.5.15 naujienos:** pasirinktiniai kortos formatai, laisvas slinkimas už Lietuvos ribų, visame pasaulyje rodomos RainViewer/OSM plytelės, namų vietos žymeklis iš `zone.home`, vietos centravimas ir spustelėtos vietos Open-Meteo sniego/temperatūros prognozė. Sniegas – modelio prognozė, ne tiesioginis matavimas.
+**v0.5.16 naujienos:** pasirinktiniai kortos formatai, laisvas slinkimas už Lietuvos ribų, visame pasaulyje rodomos RainViewer/MapTiler plytelės (su savo MapTiler raktu), namų vietos žymeklis iš `zone.home`, vietos centravimas ir spustelėtos vietos Open-Meteo sniego/temperatūros prognozė. Sniegas – modelio prognozė, ne tiesioginis matavimas.
 
-**Versija:** [v0.5.15](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.15) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.16](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.16) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -36,7 +36,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.10`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.16`.
 
 ## Saugumas ir informacija
 
@@ -48,6 +48,12 @@ RainViewer vieša nemokama API skirta asmeniniam / mokomajam naudojimui ir turi 
 
 *Pastaba: naujos RainViewer versijos radaro kadrų keliai turi 12 simbolių identifikatorius, todėl integracija priima ir naują, ir seną URL formatą.*
 
+### Naujos detalios žemėlapio plytelės (v0.5.16)
+
+Standartinis OSM bendruomenės serveris kai kuriuos užklausų šablonus blokuoja (403). Alternatyvūs bendruomenės serveriai gali netikti privačiam HA dashboardui. Todėl detaliam žemėlapiui naudokite asmeninį **MapTiler API raktą** ir laikykitės MapTiler naudojimo sąlygų/kvotų. Raktą įrašykite kortos redaktoriuje „MapTiler API raktas“ arba konfigūracijoje `maptiler_api_key`. Jis nėra įrašomas į viešą GitHub kodą; kaip įprastai žiniatinklio žemėlapiams, matomas naršyklėje. Be rakto rodomos apskričių ribos ir orų sluoksniai be užblokuotų plytelių. Tamsus režimas naudoja `streets-v4-dark`, šviesūs – `streets-v4`.
+
+Vėjo greitis ir gūsiai rodomi **m/s**, priartinimo metu savarankiški užrašai išlieka skaitomo dydžio. „Sniegas“ režime papildomai rodomas RainViewer stebėtų kritulių radaras, tačiau sniego rūšis bei perkūnija iš Open-Meteo lieka **modelių duomenimis**, ne realiu laiku išmatuotais reiškiniais. Žaibo smūgių koordinačių korta neturi. Pasirinktą vietą kortoje galima tikrinti pagal šio momento modelio temperatūrą, sniegą, kritulius bei vėją.
+
 ### Pasirenkami kortos formatai ir geografijos apžiūra
 
 Kortos redaktoriuje **Žemėlapio formatas → Kvadratinis (1:1)**. Žemėlapį slinkite pele ar pirštu, o už Lietuvos ribų radaras rodys RainViewer kritulius ten, kur šaltinis turi aprėptį. **Paspaudę bet kurią vietą**, gausite Open-Meteo temperatūros, sniego ir kritulių **modelio prognozę** tam taškui (koordinatės siunčiamos Open-Meteo paslaugai). LT72 oro pavojaus statusai ir apskričių orų imtys lieka tik Lietuvai; palydovo sluoksnis išlieka pradinės geografinės aprėpties. Bazinės žemėlapio plytelės pateikiamos OpenStreetMap su privalomu autorystės nurodymu.
@@ -56,6 +62,7 @@ Kortos redaktoriuje **Žemėlapio formatas → Kvadratinis (1:1)**. Žemėlapį 
 
 ```yaml
 type: custom:lt72-weather-map
+# maptiler_api_key: JŪSŲ_MAPTILER_RAKTAS
 layer: wind
 animated_wind: true
 wind_particles: medium # low | medium | high

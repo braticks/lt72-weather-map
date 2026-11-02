@@ -286,6 +286,7 @@ assert(card.shadowRoot.innerHTML.includes('OpenStreetMap contributors'));
 assert(card.shadowRoot.innerHTML.includes('class="osm-attribution"'));
 card.setConfig({type:"custom:lt72-weather-map",layer:"radar",map_theme:"dark",show_sources:false});
 assert(card.shadowRoot.innerHTML.includes('class="osm-attribution"'),"OSM credit stays visible if sources row is collapsed");
+card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:true,show_sources:true});
 assert(card.shadowRoot.innerHTML.includes('tile.openstreetmap.org/7/'));
 assert(!card.shadowRoot.innerHTML.includes('class="zoom-controls"'));;
 assert(!card.shadowRoot.innerHTML.includes('<details class="source-details">'));

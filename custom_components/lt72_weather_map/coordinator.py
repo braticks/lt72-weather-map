@@ -180,24 +180,55 @@ class LT72WeatherCoordinator(DataUpdateCoordinator[dict]):
             self._weather_time = now
             try:
                 rows = list(METEO_POINTS.values())
-                params = {
-                    "latitude": ",".join(str(x[1]) for x in rows),
-                    "longitude": ",".join(str(x[2]) for x in rows),
-                    "current": "wind_speed_10m,wind_direction_10m,"
-                               "wind_gusts_10m,snowfall,precipitation,weather_code,temperature_2m",
-                    "forecast_days": 1,
-                    "minutely_15": "wind_speed_10m,wind_direction_10m",
-                    "past_minutely_15": 3,
-                    "forecast_minutely_15": 1,
-                    "wind_speed_unit": "kmh",
-                    "timezone": "Europe/Vilnius",
-                }
-                async with session.get(
-                    SOURCE_METEO, params=params, timeout=ClientTimeout(total=22)
-                ) as response:
-                    response.raise_for_status()
-                    payload = await response.json()
-                self._weather = parse_meteo(payload)
+
+                async def request_weather(points: list, with_15m: bool) -> list:
+                    """Use lightweight current data if the larger 15m request fails."""
+                    params = {
+                        "latitude": ",".join(str(x[1]) for x in points),
+                        "longitude": ",".join(str(x[2]) for x in points),
+                        "current": "wind_speed_10m,wind_direction_10m,"
+                                   "wind_gusts_10m,snowfall,precipitation,weather_code,temperature_2m",
+                        "forecast_days": 1,
+                        "wind_speed_unit": "kmh",
+                        "timezone": "Europe/Vilnius",
+                    }
+                    if with_15m:
+                        params.update({
+                            "minutely_15": "wind_speed_10m,wind_direction_10m",
+                            "past_minutely_15": 3,
+                            "forecast_minutely_15": 1,
+                        })
+                    async with session.get(
+                        SOURCE_METEO, params=params, timeout=ClientTimeout(total=22)
+                    ) as response:
+                        response.raise_for_status()
+                        payload = await response.json()
+                    # Open-Meteo returns an object for one point, list for many.
+                    if len(points) == 1 and isinstance(payload, dict):
+                        payload = [payload]
+                    if not isinstance(payload, list) or len(payload) != len(points):
+                        raise ValueError("Open-Meteo location count mismatch")
+                    return payload
+
+                try:
+                    self._weather = parse_meteo(await request_weather(rows, True))
+                except (ClientError, TimeoutError, ValueError) as primary_error:
+                    _LOGGER.debug(
+                        "Open-Meteo 15m request failed (%s), retrying current only",
+                        primary_error,
+                    )
+                    try:
+                        self._weather = parse_meteo(
+                            await request_weather(rows, False)
+                        )
+                    except (ClientError, TimeoutError, ValueError):
+                        # A multi-point 503 can be avoided with smaller batches.
+                        # Keep the full 11-location schema for parse_meteo.
+                        chunks = (rows[:6], rows[6:])
+                        lightweight = []
+                        for chunk in chunks:
+                            lightweight.extend(await request_weather(chunk, False))
+                        self._weather = parse_meteo(lightweight)
             except (ClientError, TimeoutError, ValueError) as exc:
                 # No stale forecast is presented as current.
                 self._weather = {}

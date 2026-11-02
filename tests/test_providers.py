@@ -170,3 +170,63 @@ class FifteenMinuteWindTests(unittest.TestCase):
         item["minutely_15"]["time"] = [
             "2026-10-18T20:00","2026-10-18T20:15","2026-10-18T21:45"]
         self.assertIsNone(wind_15m_model_average(item))
+
+
+class WeatherFallbackTests(unittest.IsolatedAsyncioTestCase):
+    async def test_lightweight_request_omits_heavy_15m_data(self):
+        # Execute the coordinator's real nested request function with fake HTTP.
+        coordinator = next(node for node in module.body
+                           if isinstance(node, ast.ClassDef)
+                           and node.name == "LT72WeatherCoordinator")
+        update = next(node for node in coordinator.body
+                      if isinstance(node, ast.AsyncFunctionDef)
+                      and node.name == "_async_update_data")
+        request = next(node for node in ast.walk(update)
+                       if isinstance(node, ast.AsyncFunctionDef)
+                       and node.name == "request_weather")
+
+        class Response:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_):
+                return False
+
+            def raise_for_status(self):
+                pass
+
+            async def json(self):
+                return {"current": {"wind_speed_10m": 10}}
+
+        class Session:
+            def __init__(self):
+                self.calls = []
+
+            def get(self, url, params, timeout):
+                self.calls.append((url, params))
+                return Response()
+
+        session = Session()
+        env = {"session": session, "SOURCE_METEO": "https://example.test",
+               "ClientTimeout": lambda **kwargs: kwargs}
+        exec(compile(ast.Module(body=[request], type_ignores=[]),
+                     str(SOURCE), "exec"), env)
+        result = await env["request_weather"]([("Kaunas", 54.9, 23.9)], False)
+        self.assertEqual(len(result), 1)
+        self.assertNotIn("minutely_15", session.calls[-1][1])
+        self.assertEqual(session.calls[-1][1]["latitude"], "54.9")
+        await env["request_weather"]([("Kaunas", 54.9, 23.9)], True)
+        self.assertIn("minutely_15", session.calls[-1][1])
+
+    def test_fallback_is_used_after_full_request_failure(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("await request_weather(rows, True)", source)
+        self.assertIn("await request_weather(rows, False)", source)
+        self.assertIn("chunks = (rows[:6], rows[6:])", source)
+
+
+class FrontendVersionTests(unittest.TestCase):
+    def test_frontend_version_follows_manifest(self):
+        frontend = SOURCE.with_name("frontend.py").read_text(encoding="utf-8")
+        self.assertIn('Path(__file__).with_name("manifest.json")', frontend)
+        self.assertNotIn('MODULE_VERSION = "0.', frontend)

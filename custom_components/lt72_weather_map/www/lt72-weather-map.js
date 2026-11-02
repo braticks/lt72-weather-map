@@ -33,6 +33,10 @@ const WMAP_CITY_SETS=[
  ["main","5 pagrindiniai miestai + Biržai"],
  ["all","Visi 10 apskričių centrų + Biržai"]
 ];
+function wmapWindMs(value){
+ const n=Number(value);
+ return Number.isFinite(n)?(n/3.6).toFixed(1):"–";
+}
 function wmapTemperatureLabel(value) {
  if(typeof value!=="number"||!Number.isFinite(value))return null;
  const rounded=Math.round(value);
@@ -578,7 +582,7 @@ class LT72WeatherMapCard extends HTMLElement {
    try{
      const params=new URLSearchParams({
        latitude:latitude.toFixed(4),longitude:longitude.toFixed(4),
-       current:"temperature_2m,snowfall,precipitation,weather_code",
+       current:"temperature_2m,snowfall,precipitation,weather_code,wind_speed_10m,wind_gusts_10m",wind_speed_unit:"ms",
        timezone:"auto",forecast_days:"1"
      });
      const response=await fetch("https://api.open-meteo.com/v1/forecast?"+params.toString());
@@ -591,6 +595,7 @@ class LT72WeatherMapCard extends HTMLElement {
      this._inspection={latitude,longitude,loading:false,
        temperature:value("temperature_2m"),snow:value("snowfall"),
        rain:value("precipitation"),weather_code:value("weather_code"),
+       wind:value("wind_speed_10m"),gust:value("wind_gusts_10m"),
        timestamp:data.time||null};
    }catch(_err){
      if(request!==this._inspectionRequest)return;
@@ -987,7 +992,7 @@ class LT72WeatherMapCard extends HTMLElement {
            '</g></g>';
        }
        if(this._show("show_weather_labels")){
-         const windText=w.wind_kmh+" km/h"+(w.wind_window==="15m"?" (15 min)":"");
+         const windText=wmapWindMs(w.wind_kmh)+" m/s"+(w.wind_window==="15m"?" (15 min)":"");
          shapes+='<text class="weather-label" x="'+s.x.toFixed(1)+
            '" y="'+(s.y+26).toFixed(1)+'" text-anchor="middle">'+
            WMAP_ESC(windText)+'</text>';
@@ -1088,6 +1093,7 @@ class LT72WeatherMapCard extends HTMLElement {
        '<p>🌡️ '+(spot.temperature===null?'–':WMAP_ESC(spot.temperature+' °C'))+
        ' · ❄️ sniegas '+(spot.snow===null?'–':WMAP_ESC(spot.snow+' cm'))+
        ' · 🌧️ krituliai '+(spot.rain===null?'–':WMAP_ESC(spot.rain+' mm'))+
+       ' · 💨 vėjas '+(spot.wind==null?'–':WMAP_ESC(spot.wind+' m/s'))+
        '</p><small>Open-Meteo dabartinio intervalo modelio prognozė, ne faktinis sniego stebėjimas.</small>')+
        '</div>':"";
    const animateWind=showWind&&this._config.animated_wind!==false;
@@ -1098,9 +1104,9 @@ class LT72WeatherMapCard extends HTMLElement {
      '" type="button">'+WMAP_ESC(m[1])+'</button>').join("");
    const weatherInfo=weatherReady&&forecast?
      '<div class="weather-details">'+
-       '<span>💨 '+WMAP_ESC(forecast.wind_kmh)+' km/h'+
+       '<span>💨 '+WMAP_ESC(wmapWindMs(forecast.wind_kmh))+' m/s'+
          (forecast.wind_window==="15m"?' (15 min. modelio vid.)':' (modelis dabar)')+'</span>'+
-       '<span>Gūsiai '+WMAP_ESC(forecast.gust_kmh)+' km/h</span>'+
+       '<span>Gūsiai '+WMAP_ESC(wmapWindMs(forecast.gust_kmh))+' m/s</span>'+
        '<span>❄ '+WMAP_ESC(forecast.snow_cm)+' cm</span>'+
        '<span>🌧 '+WMAP_ESC(forecast.precip_mm)+' mm</span>'+
        (wmapIsSnowForecast(forecast)?'<span>❄ Prognozuojamas snygis</span>':"")+
@@ -1239,7 +1245,12 @@ class LT72WeatherMapCard extends HTMLElement {
      '.credits{display:flex;justify-content:flex-end;font-size:10px;gap:4px;color:var(--secondary-text-color);margin-top:8px;flex-wrap:wrap}.credits a{color:var(--secondary-text-color);text-decoration:underline}',
      '.source-details{font-size:10px;text-align:right;color:var(--secondary-text-color);margin-top:4px}.source-details summary{cursor:pointer;display:inline-block;padding:2px 4px}.source-details .credits{margin-top:1px}',
      '.compact{padding:8px}.compact .header{margin-bottom:5px}.compact .mode{font-size:11px;padding:5px}.compact .toolbar{margin-bottom:6px}',
-     '@media(max-width:480px){.county-label{font-size:16px}.weather-label{font-size:16px}ha-card{padding:10px}.toolbar{gap:4px}.mode{padding:6px;font-size:11px}}',
+     '@media(max-width:480px){ha-card{padding:10px}.toolbar{gap:4px}.mode{padding:6px;font-size:11px}}',
+     // Scale overlay labels inversely to zoom; roads and basemap labels use zoom-level tiles.
+     '.county-label,.neighbor-label{font-size:'+(13/this._mapZoom).toFixed(2)+'px;stroke-width:'+(2/this._mapZoom).toFixed(2)+'px}',
+     '.city-label{font-size:'+(13/this._mapZoom).toFixed(2)+'px;stroke-width:'+(2.5/this._mapZoom).toFixed(2)+'px}',
+     '.city-value{font-size:'+(17/this._mapZoom).toFixed(2)+'px;stroke-width:'+(2.6/this._mapZoom).toFixed(2)+'px}',
+     '.weather-label{font-size:'+(12/this._mapZoom).toFixed(2)+'px;stroke-width:'+(3/this._mapZoom).toFixed(2)+'px}',
      '</style>',
      '<ha-card'+(this._config.compact?' class="compact"':'')+
        ' style="--wmap-sea:'+theme.sea+';--wmap-land:'+theme.land+

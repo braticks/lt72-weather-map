@@ -421,6 +421,7 @@ class LT72WeatherMapCard extends HTMLElement {
    this._windRaf=null;this._windParticles=[];this._windLastTime=0;
    this._devicePosition=null;this._geolocationError="";
    this._locationOverride=null;
+   this._inspection=null;this._inspectionRequest=0;
    this._mapZoom=1;this._mapCenter={x:380,y:222};this._mapDrag=null;
    this._suppressMapClick=false;this._renderPending=false;
    this._geolocationWatchId=null;this._checkedGeoPermission=false;
@@ -561,6 +562,40 @@ class LT72WeatherMapCard extends HTMLElement {
    this._setMapZoom(next,x,y);
    this._render();
  }
+ async _inspectPosition(event,viewport){
+   if(!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return;
+   const rect=viewport.getBoundingClientRect();
+   if(!rect?.width)return;
+   const x=this._mapCenter.x+(event.clientX-rect.left-rect.width/2)*760/(rect.width*this._mapZoom);
+   const y=this._mapCenter.y+(event.clientY-rect.top-rect.height/2)*760/(rect.width*this._mapZoom);
+   const [longitude,latitude]=wmapProjection().lonlat(x,y);
+   if(!Number.isFinite(latitude)||Math.abs(latitude)>85||!Number.isFinite(longitude)||Math.abs(longitude)>180)return;
+   const request=++this._inspectionRequest;
+   this._inspection={latitude,longitude,loading:true};
+   this._render();
+   try{
+     const params=new URLSearchParams({
+       latitude:latitude.toFixed(4),longitude:longitude.toFixed(4),
+       current:"temperature_2m,snowfall,precipitation,weather_code",
+       timezone:"auto",forecast_days:"1"
+     });
+     const response=await fetch("https://api.open-meteo.com/v1/forecast?"+params.toString());
+     if(!response.ok)throw Error("HTTP "+response.status);
+     const payload=await response.json();
+     const data=payload?.current;
+     if(!data||typeof data!=="object")throw Error("Trūksta modelio duomenų");
+     if(request!==this._inspectionRequest)return;
+     const value=key=>Number.isFinite(data[key])?data[key]:null;
+     this._inspection={latitude,longitude,loading:false,
+       temperature:value("temperature_2m"),snow:value("snowfall"),
+       rain:value("precipitation"),weather_code:value("weather_code"),
+       timestamp:data.time||null};
+   }catch(_err){
+     if(request!==this._inspectionRequest)return;
+     this._inspection={latitude,longitude,loading:false,error:"Šios vietos prognozė neprieinama"};
+   }
+   this._render();
+ }
  _attachMapNavigation(){
    const root=this.shadowRoot;
    root.querySelectorAll("[data-map-zoom]").forEach(button=>{
@@ -618,6 +653,10 @@ class LT72WeatherMapCard extends HTMLElement {
    viewport.addEventListener("dblclick",event=>{
      event.preventDefault();
      this._changeMapZoom(1);
+   });
+   viewport.addEventListener("click",event=>{
+     if(event.detail>1||event.target?.closest?.("button,select,a"))return;
+     this._inspectPosition(event,viewport);
    });
  }
  _stopLocationWatch(){
@@ -999,6 +1038,13 @@ class LT72WeatherMapCard extends HTMLElement {
    const locationOutside=!!locationInfo&&!locationPoint;
    const locationColor=locationInfo?.source==="home"?"#059669":
      locationInfo?.source==="city"?"#ea580c":"#2563eb";
+   const inspectPoint=this._inspection?
+     projection.xy(this._inspection.longitude,this._inspection.latitude):null;
+   const inspectMarker=inspectPoint&&(this._inspection.longitude!=null)?
+     '<g class="inspect-marker" pointer-events="none" transform="translate('+
+       inspectPoint[0].toFixed(1)+','+inspectPoint[1].toFixed(1)+')">'+
+       '<circle r="8" fill="#facc15" stroke="#151515" stroke-width="2.4"></circle>'+
+       '<circle r="2" fill="#151515"></circle></g>':"";
    const deviceMarker=locationPoint?
      '<g class="device-location" role="img" aria-label="'+WMAP_ESC(locationInfo.label)+'">'+
        '<circle cx="'+locationPoint.x.toFixed(1)+'" cy="'+locationPoint.y.toFixed(1)+
@@ -1029,6 +1075,18 @@ class LT72WeatherMapCard extends HTMLElement {
      (!locationInfo&&["auto","home"].includes(locationChoice)?
        "HA namų koordinatės nenustatytos – pasirinkite miestą.":"")
    );
+   const spot=this._inspection;
+   const inspectText=spot?
+     '<div class="spot-info"><strong>📌 Pasirinkta vieta ('+
+       spot.latitude.toFixed(3)+', '+spot.longitude.toFixed(3)+')</strong>'+
+       '<button type="button" data-inspect-close title="Uždaryti" aria-label="Uždaryti">×</button>'+
+       (spot.loading?'<p>Gaunama orų prognozė…</p>':
+       spot.error?'<p>'+WMAP_ESC(spot.error)+'</p>':
+       '<p>🌡️ '+(spot.temperature===null?'–':WMAP_ESC(spot.temperature+' °C'))+
+       ' · ❄️ sniegas '+(spot.snow===null?'–':WMAP_ESC(spot.snow+' cm'))+
+       ' · 🌧️ krituliai '+(spot.rain===null?'–':WMAP_ESC(spot.rain+' mm'))+
+       '</p><small>Open-Meteo dabartinio intervalo modelio prognozė, ne faktinis sniego stebėjimas.</small>')+
+       '</div>':"";
    const animateWind=showWind&&this._config.animated_wind!==false;
    // Hide zoom buttons while keeping gestures and drag navigation.
    const zoomControls="";
@@ -1155,6 +1213,9 @@ class LT72WeatherMapCard extends HTMLElement {
      '[data-region]{cursor:pointer;outline:none}[data-region]:focus-visible path,[data-region]:hover path{stroke:#2563eb;stroke-width:3}',
      '.missing{padding:30px 10px;color:var(--secondary-text-color);text-align:center}',
      '.geo-note{font-size:11px;color:var(--secondary-text-color);margin-top:5px;line-height:1.4}',
+     '.spot-info{position:relative;margin-top:8px;padding:8px 10px;font-size:11px;background:var(--secondary-background-color);border-radius:8px;line-height:1.5}',
+     '.spot-info p{margin:4px 20px 3px 0}.spot-info small{color:var(--secondary-text-color)}',
+     '.spot-info button{position:absolute;right:6px;top:5px;border:0;background:transparent;color:var(--primary-text-color);font-size:19px;cursor:pointer}',
      '.overlay-alert{position:absolute;left:8px;top:8px;padding:5px 7px;border-radius:7px;background:var(--card-background-color,#fff);font-size:11px;box-shadow:0 1px 3px #0002}',
      '.timeline{display:flex;align-items:center;justify-content:center;gap:10px;font-size:11px;margin-top:8px;color:var(--secondary-text-color)}',
      '.timeline button{border:1px solid var(--divider-color);color:var(--primary-text-color);border-radius:7px;background:transparent;font-size:19px;cursor:pointer;padding:0 10px}.timeline button:disabled{opacity:.3;cursor:default}',
@@ -1190,7 +1251,7 @@ class LT72WeatherMapCard extends HTMLElement {
              '<rect x="0" y="0" width="760" height="444" fill="var(--wmap-sea)"></rect>'+
              neighborBase+detailTiles+satelliteImage+images+
              '<g class="neighbor-outlines">'+neighbors+'</g>'+
-             countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+'</svg>'+
+             countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+inspectMarker+'</svg>'+
            (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':"")+
          '</div></div></div>',
      locationButton,recenterButton,locationPicker,zoomControls,osmCredit,
@@ -1198,6 +1259,7 @@ class LT72WeatherMapCard extends HTMLElement {
        "Radaro duomenys nepasiekiami":"Orų prognozės nepasiekiamos")+'</div>':""),
      '</div>',
      (locationNote?'<div class="geo-note">'+WMAP_ESC(locationNote)+'</div>':""),
+     inspectText,
      timeline,precipitationGuide,satelliteGuide,details,legend,explanatory,sourcesMarkup,
      '</ha-card>'
    ].join("");
@@ -1208,6 +1270,9 @@ class LT72WeatherMapCard extends HTMLElement {
          this._render();
        }
      });
+   });
+   root.querySelectorAll("[data-inspect-close]").forEach(node=>{
+     node.addEventListener("click",()=>{this._inspectionRequest++;this._inspection=null;this._render();});
    });
    root.querySelectorAll("[data-recenter]").forEach(node=>{
      node.addEventListener("click",()=>{
@@ -1345,7 +1410,7 @@ class LT72WeatherMapEditor extends HTMLElement {
      ...WMAP_MAP_ZOOM_STEPS.map(z=>
        '<option value="'+z+'"'+(wmapClampMapZoom(current.default_zoom)===z?' selected':'')+'>'+z+'×</option>'),
      '</select></label>',
-     '<p>Žemėlapį galima slinkti pele ar pirštu bet kokiu masteliu, taip pat už Lietuvos ribų. Dvigubas spustelėjimas arba Ctrl + ratukas – priartinimas. Radarą galima stebėti už Lietuvos ribų, o apskričių sniego prognozės pateikiamos tik Lietuvai.</p>',
+     '<p>Žemėlapį galima slinkti pele ar pirštu už Lietuvos ribų. Dvigubas spustelėjimas arba Ctrl + ratukas – priartinimas. Paspaudus bet kurią vietą, pateikiama Open-Meteo temperatūros, sniego ir kritulių modelio prognozė; radaras rodo stebėtus kritulius, bet nepatvirtina sniego rūšies.</p>',
      '<h4>Mano vieta žemėlapyje</h4>',
      '<label class="field"><span>Vietos šaltinis</span><select data-select="location_mode">',
      ...WMAP_LOCATION_MODES.map(([id,name])=>

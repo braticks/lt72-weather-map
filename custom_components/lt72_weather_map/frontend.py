@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -15,7 +16,9 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 FRONTEND_URL = f"/{DOMAIN}"
 MODULE_URL = f"{FRONTEND_URL}/lt72-weather-map.js"
-MODULE_VERSION = "0.5.10"
+MODULE_VERSION = json.loads(
+    Path(__file__).with_name("manifest.json").read_text(encoding="utf-8")
+)["version"]
 ASSETS = Path(__file__).parent / "www"
 
 

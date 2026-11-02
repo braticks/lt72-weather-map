@@ -391,8 +391,9 @@ assert(sceneStart>=0&&svgAt>sceneStart&&canvasAt>svgAt&&closeScene>canvasAt,
 assert.equal(zoomCard._mapZoom,2);
 zoomCard._setMapZoom(40,800,-100);
 assert.equal(zoomCard._mapZoom,4);
-assert(zoomCard._mapCenter.x<=665&&zoomCard._mapCenter.y>=55.5);
-zoomCard._setMapZoom(1,0,0);
+assert.equal(zoomCard._mapCenter.x,800);
+assert.equal(zoomCard._mapCenter.y,-100);
+zoomCard._setMapZoom(1,380,222);
 assert.equal(zoomCard._mapCenter.x,380);
 assert.equal(zoomCard._mapCenter.y,222);
 zoomCard._hass.config={latitude:54.8985,longitude:23.9036};
@@ -438,14 +439,29 @@ mapEvents.pointerup({pointerId:1});
 zoomCard._setMapZoom(1,380,222);
 assert.equal(zoomCard._mapZoom,1);
 zoomCard.setConfig({type:"custom:lt72-weather-map",show_zoom:false,default_zoom:"3"});
-assert.equal(zoomCard._mapZoom,1);
+assert.equal(zoomCard._mapZoom,3,"Hidden controls must not disable map navigation");
 assert(!zoomCard.shadowRoot.innerHTML.includes('data-map-zoom="in"'));
 editor._change("default_zoom","3");
 assert.equal(editor.event.detail.config.default_zoom,"3");
 assert(editor.shadowRoot.innerHTML.includes('data-select="default_zoom"'));
 editor._change("show_map_details",false);
 assert.equal(editor.event.detail.config.show_map_details,false);
-console.log("Map zoom controls, persistent default, shared overlays, drag pan and bounds passed.");
+assert.equal(vm.runInContext('wmapAspectRatio("square")',ctx),1);
+assert.equal(vm.runInContext('wmapAspectRatio("portrait")',ctx),.75);
+zoomCard.setConfig({type:"custom:lt72-weather-map",map_aspect:"square",default_zoom:"1"});
+assert(zoomCard.shadowRoot.innerHTML.includes('style="--wmap-aspect:1 / 1"'));
+assert(zoomCard.shadowRoot.innerHTML.includes('class="map-scene-holder"'));
+assert(zoomCard.shadowRoot.innerHTML.includes("overflow:visible"));
+editor._change("map_aspect","square");
+assert.equal(editor.event.detail.config.map_aspect,"square");
+assert(editor.shadowRoot.innerHTML.includes('data-select="map_aspect"'));
+const abroad=vm.runInContext('wmapProjection().xy(18,63)',ctx);
+ctx.abroad=abroad;
+const outsideTiles=vm.runInContext('wmapDetailTiles(wmapProjection(),wmapViewBounds({x:abroad[0],y:abroad[1]},1,"square",0.4))',ctx);
+assert(outsideTiles.length>0&&outsideTiles.some(t=>t.y<0),"OSM tiles follow panning beyond Lithuania");
+const outsideRadar=vm.runInContext('wmapRadarTiles(radar,frame,wmapProjection(),wmapViewBounds({x:abroad[0],y:abroad[1]},1,"square",0.4))',ctx);
+assert(outsideRadar.length>0&&outsideRadar.some(t=>t.y<0),"Radar tiles follow pan beyond Lithuania");
+console.log("Square/portrait layouts, global pan and radar/OSM tile coverage passed.");
 
 // Regression: geolocation/state updates must not close an open map selector.
 const focusCard=vm.runInContext("new LT72WeatherMapCard()",ctx);
@@ -545,6 +561,13 @@ async function testAutomaticBrowserLocation(){
   assert(home.shadowRoot.innerHTML.includes('class="device-location"'));
   assert(home.shadowRoot.innerHTML.includes('data-location-choice'));
   assert(home.shadowRoot.innerHTML.includes('fill="#059669"'));
+  assert(home.shadowRoot.innerHTML.includes('data-recenter="true"'));
+  const zoneFallback=vm.runInContext("new LT72WeatherMapCard()",ctx);
+  zoneFallback._regions=paths;
+  zoneFallback.setConfig({type:"custom:lt72-weather-map",location_mode:"auto"});
+  zoneFallback.hass={config:{},states:{"zone.home":{attributes:{latitude:54.8985,longitude:23.9036}}}};
+  assert(zoneFallback.shadowRoot.innerHTML.includes('class="device-location"'),"HA zone.home restores marker");
+  assert(zoneFallback.shadowRoot.innerHTML.includes('data-recenter="true"'));
 
   home.setConfig({type:"custom:lt72-weather-map",location_mode:"auto"});
   home.connectedCallback();
@@ -571,6 +594,22 @@ async function testAutomaticBrowserLocation(){
   editorHome._change("location_mode","city");
   editorHome._change("location_city","birzai");
   assert.equal(editorHome.event.detail.config.location_city,"birzai");
+  ctx.fetch=async url=>{
+    assert(url.includes("api.open-meteo.com/v1/forecast?"));
+    return {ok:true,json:async()=>({current:{
+      snowfall:0.4,precipitation:0.8,temperature_2m:-1.2,weather_code:71
+    }})};
+  };
+  const inspect=vm.runInContext("new LT72WeatherMapCard()",ctx);
+  inspect._regions=paths;
+  inspect.setConfig({type:"custom:lt72-weather-map",map_aspect:"square"});
+  await inspect._inspectPosition({clientX:380,clientY:380},{
+    getBoundingClientRect:()=>({left:0,top:0,width:760,height:760})
+  });
+  assert(inspect.shadowRoot.innerHTML.includes("0.4 cm"));
+  assert(inspect.shadowRoot.innerHTML.includes("modelio prognozė"));
+  assert(inspect.shadowRoot.innerHTML.includes('class="inspect-marker"'));
+  console.log("Model snow inspection, zone.home fallback and GPS map marker passed.");
   console.log("Local HTTP fallback, HA home marker, permanent city settings and card picker passed.");
   console.log("Automatic browser geolocation, GPS map dot and HTTPS guard passed.");
 }

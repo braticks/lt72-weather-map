@@ -63,6 +63,16 @@ const WMAP_MAP_THEMES=[
  ["dark","Tamsus"],
  ["blue","Melsvas"]
 ];
+// Map aspect presets keep geographic geometry in correct proportions.
+const WMAP_MAP_ASPECTS=[
+ ["original","Originalus (760:444)","760 / 444"],
+ ["wide","Platus (16:9)","16 / 9"],
+ ["landscape","Standartinis (4:3)","4 / 3"],
+ ["square","Kvadratinis (1:1)","1 / 1"],
+ ["portrait","Vertikalus (3:4)","3 / 4"]
+];
+function wmapAspectValue(key){return WMAP_MAP_ASPECTS.find(a=>a[0]===key)?.[2]||"760 / 444";}
+function wmapAspectRatio(key){const [a,b]=wmapAspectValue(key).split("/").map(Number);return a/b;}
 const WMAP_THEME_COLORS={
  gray:{sea:"#7b858c",land:"#a7acb1",outline:"#69757f",names:"#384b5a",county:"#4c6476",label:"#263f55"},
  light:{sea:"#dbeaf0",land:"#f2f2ec",outline:"#a9b6b6",names:"#697b86",county:"#94a7aa",label:"#284559"},
@@ -151,21 +161,43 @@ function wmapProjection(){
    tileRect(x,y){
      return [dx+(x*WMAP_TILE-x0)*scale,dy+(y*WMAP_TILE-y0)*scale,
              WMAP_TILE*scale,WMAP_TILE*scale];
+   },
+   lonlat(x,y){
+     const worldX=x0+(x-dx)/scale,worldY=y0+(y-dy)/scale;
+     return [worldX/pixelsPerWorld*360-180,
+       Math.atan(Math.sinh(Math.PI*(1-2*worldY/pixelsPerWorld)))*180/Math.PI];
    }
  };
 }
-// OSM standard raster tiles: rivers, lakes and main roads; correct attribution
-// is displayed under the map. Browser caching reduces repeat downloads.
-function wmapDetailTiles(proj=wmapProjection()){
- const z=7, factor=2**(z-WMAP_ZOOM);
- const {xmin,xmax,ymin,ymax}=proj.tileBounds;
+// Scene bounds account for zoom, pan and square or portrait cards.
+function wmapViewBounds(center={x:380,y:222},zoom=1,aspect="original",margin=0){
+ const z=wmapClampMapZoom(zoom),ratio=wmapAspectRatio(aspect);
+ const halfX=380/z,halfY=380/(ratio*z);
+ const buffer=margin*Math.max(halfX,halfY);
+ return {xmin:center.x-halfX-buffer,xmax:center.x+halfX+buffer,
+         ymin:center.y-halfY-buffer,ymax:center.y+halfY+buffer};
+}
+function wmapTileBounds(proj,view){
+ if(!view)return proj.tileBounds;
+ const [offsetX,offsetY,tileW,tileH]=proj.tileRect(0,0);
+ return {xmin:Math.floor((view.xmin-offsetX)/tileW)-1,
+         xmax:Math.ceil((view.xmax-offsetX)/tileW)+1,
+         ymin:Math.floor((view.ymin-offsetY)/tileH)-1,
+         ymax:Math.ceil((view.ymax-offsetY)/tileH)+1};
+}
+// Browser-cached OpenStreetMap tiles follow pan worldwide; correct attribution displayed.
+function wmapDetailTiles(proj=wmapProjection(),view=null){
+ const z=7,factor=2**(z-WMAP_ZOOM);
+ const {xmin,xmax,ymin,ymax}=wmapTileBounds(proj,view);
  const tiles=[];
- for(let x=(xmin+1)*factor-2;x<=(xmax-1)*factor+1;x++){
-   for(let y=(ymin+1)*factor-2;y<=(ymax-1)*factor+1;y++){
+ for(let x=xmin*factor-1;x<=(xmax+1)*factor+1;x++){
+   for(let y=ymin*factor-1;y<=(ymax+1)*factor+1;y++){
      if(x<0||y<0||x>=2**z||y>=2**z)continue;
      const [px,py,w,h]=proj.tileRect(x/factor,y/factor);
-     if(px+w<=0||py+h<=0||px>=760||py>=444)continue;
-     tiles.push({url:"https://tile.openstreetmap.org/"+z+"/"+x+"/"+y+".png",x:px,y:py,w:w/factor,h:h/factor});
+     if(view&&(px+w/factor<view.xmin||py+h/factor<view.ymin||
+       px>view.xmax||py>view.ymax))continue;
+     tiles.push({url:"https://tile.openstreetmap.org/"+z+"/"+x+"/"+y+".png",
+       x:px,y:py,w:w/factor,h:h/factor});
    }
  }
  return tiles;
@@ -363,16 +395,17 @@ function wmapSnowCluster(shape) {
      '" text-anchor="middle">❄</text>'
    ).join("")+'</g>';
 }
-function wmapRadarTiles(meta,frame,proj=wmapProjection()){
+function wmapRadarTiles(meta,frame,proj=wmapProjection(),view=null){
  const host=String(meta?.host||"");
  const path=String(frame?.path||"");
  if(host!=="https://tilecache.rainviewer.com"||!/^\/v2\/radar\/(?:[0-9]{9,12}|[0-9a-f]{12})$/.test(path))return [];
- const {xmin,xmax,ymin,ymax}=proj.tileBounds;
+ const {xmin,xmax,ymin,ymax}=wmapTileBounds(proj,view);
  const results=[];
  for(let x=xmin;x<=xmax;x++)for(let y=ymin;y<=ymax;y++){
    if(x<0||y<0||x>=64||y>=64)continue;
    const [px,py,w,h]=proj.tileRect(x,y);
-   results.push({url:host+path+"/256/6/"+x+"/"+y+"/2/1_1.png",x:px,y:py,w,h});
+   if(view&&(px+w<view.xmin||py+h<view.ymin||px>view.xmax||py>view.ymax))continue;
+   results.push({url:host+path+"/256/6/"+x+"/"+y+"/2/1_1.png",x:px, y:py,w,h});
  }
  return results;
 }

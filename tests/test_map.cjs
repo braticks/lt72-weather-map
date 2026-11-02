@@ -453,6 +453,24 @@ zoomCard.setConfig({type:"custom:lt72-weather-map",map_aspect:"square",default_z
 assert(zoomCard.shadowRoot.innerHTML.includes('style="--wmap-aspect:1 / 1"'));
 assert(zoomCard.shadowRoot.innerHTML.includes('class="map-scene-holder"'));
 assert(zoomCard.shadowRoot.innerHTML.includes("overflow:visible"));
+assert(zoomCard.shadowRoot.innerHTML.includes('<svg viewBox="0 -158 760 760"'),
+  "Square viewport must show 760 map units vertically, not a letterboxed 444");
+assert(zoomCard.shadowRoot.innerHTML.includes('width="760" height="760" fill="var(--wmap-sea)"'));
+assert(zoomCard.shadowRoot.innerHTML.includes(
+  '.map-scene{position:absolute;inset:0;width:100%;height:100%'));
+zoomCard.setConfig({type:"custom:lt72-weather-map",map_aspect:"square",layer:"wind"});
+assert(zoomCard.shadowRoot.innerHTML.includes(
+  'class="wind-canvas" width="760" height="760"'));
+ctx.squareGrid=vm.runInContext(
+  'wmapBuildWindGrid(windSamples,28,{xmin:0,xmax:760,ymin:-158,ymax:602})',ctx);
+const squareWind=vm.runInContext(
+  'wmapSampleWindGrid(squareGrid,gridPos[0],gridPos[1])',ctx);
+assert(squareWind&&squareWind.speed>10,"Wind vectors remain aligned in square map");
+zoomCard.setConfig({type:"custom:lt72-weather-map",map_aspect:"square",layer:"satellite"});
+const squareSatellite=new URL(vm.runInContext(
+  'wmapSatelliteUrl(wmapProjection(),1792000000000,"ir",wmapViewBounds({x:380,y:222},1,"square"))',ctx));
+assert.equal(squareSatellite.searchParams.get("HEIGHT"),"760");
+assert(zoomCard.shadowRoot.innerHTML.includes('width="760" height="760" preserveAspectRatio="none" opacity='));
 editor._change("map_aspect","square");
 assert.equal(editor.event.detail.config.map_aspect,"square");
 assert(editor.shadowRoot.innerHTML.includes('data-select="map_aspect"'));

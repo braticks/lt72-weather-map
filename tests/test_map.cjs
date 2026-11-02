@@ -370,9 +370,9 @@ zoomCard.hass={states:{"sensor.lt72_weather":{entity_id:"sensor.lt72_weather",st
 const zoomMarkup=zoomCard.shadowRoot.innerHTML;
 assert(zoomMarkup.includes('class="map-viewport zoomed"'));
 assert(zoomMarkup.includes('class="map-scene"'));
-assert(zoomMarkup.includes('data-map-zoom="in"'));
-assert(zoomMarkup.includes('data-map-zoom="out"'));
-assert(zoomMarkup.includes('data-map-zoom="reset"'));
+assert(!zoomMarkup.includes('data-map-zoom="in"'));
+assert(!zoomMarkup.includes('data-map-zoom="out"'));
+assert(!zoomMarkup.includes('data-map-zoom="reset"'));
 const sceneStart=zoomMarkup.indexOf('class="map-scene"');
 const svgAt=zoomMarkup.indexOf('<svg viewBox="0 0 760 444"',sceneStart);
 const canvasAt=zoomMarkup.indexOf('class="wind-canvas"',svgAt);
@@ -418,7 +418,7 @@ zoomCard.shadowRoot.querySelector=(sel)=>{
 };
 zoomCard.shadowRoot.querySelectorAll=(sel)=>sel==="[data-map-zoom]"?fakeButtons:[];
 zoomCard._attachMapNavigation();
-btnEvents.in();
+zoomCard._changeMapZoom(1);
 assert.equal(zoomCard._mapZoom,2);
 assert(fakeScene.style.transform.includes("scale(2)"));
 const x0=zoomCard._mapCenter.x;
@@ -426,17 +426,16 @@ mapEvents.pointerdown({button:0,pointerId:1,clientX:200,clientY:200});
 mapEvents.pointermove({pointerId:1,clientX:240,clientY:200,preventDefault:()=>{}});
 assert(zoomCard._mapCenter.x<x0,"Dragging the map right moves center west");
 mapEvents.pointerup({pointerId:1});
-btnEvents.reset();
+zoomCard._setMapZoom(1,380,222);
 assert.equal(zoomCard._mapZoom,1);
-assert.equal(fakeButtons[1].disabled,true);
 zoomCard.setConfig({type:"custom:lt72-weather-map",show_zoom:false,default_zoom:"3"});
 assert.equal(zoomCard._mapZoom,1);
 assert(!zoomCard.shadowRoot.innerHTML.includes('data-map-zoom="in"'));
 editor._change("default_zoom","3");
 assert.equal(editor.event.detail.config.default_zoom,"3");
 assert(editor.shadowRoot.innerHTML.includes('data-select="default_zoom"'));
-editor._change("show_zoom",false);
-assert.equal(editor.event.detail.config.show_zoom,false);
+editor._change("show_map_details",false);
+assert.equal(editor.event.detail.config.show_map_details,false);
 console.log("Map zoom controls, persistent default, shared overlays, drag pan and bounds passed.");
 
 // Regression: geolocation/state updates must not close an open map selector.

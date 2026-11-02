@@ -565,7 +565,7 @@ async function testAutomaticBrowserLocation(){
   const zoneFallback=vm.runInContext("new LT72WeatherMapCard()",ctx);
   zoneFallback._regions=paths;
   zoneFallback.setConfig({type:"custom:lt72-weather-map",location_mode:"auto"});
-  zoneFallback.hass={config:{},states:{"zone.home":{attributes:{latitude:54.8985,longitude:23.9036}}}};
+  zoneFallback.hass={config:{},states:{"zone.home":{entity_id:"zone.home",attributes:{latitude:54.8985,longitude:23.9036}}}};
   assert(zoneFallback.shadowRoot.innerHTML.includes('class="device-location"'),"HA zone.home restores marker");
   assert(zoneFallback.shadowRoot.innerHTML.includes('data-recenter="true"'));
 

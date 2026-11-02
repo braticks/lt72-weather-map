@@ -13,12 +13,12 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - **Sniegas** – Open-Meteo prognozuojamas snygis. Sniego prognozė pagal apskritis nėra tas pats, kas radaro sniego spalvinimas.
 - **Palydovas** – [EUMETSAT EUMETView](https://view.eumetsat.int/) WMS vaizdas tame pačiame geografiniame žemėlapyje. Nuo v0.5.1 numatytasis variantas – **IR 10,5 µm**, vienodai naudojamas dieną ir naktį; neprivalomas GeoColour dienos ir nakties kompozitas prieinamas per UI. Debesų vaizdo ryškumas keičiamas UI. **Palydovo vaizdo realų atvaizdavimą reikia patikrinti naudojamoje HA naršyklėje:** viešasis WMS gali vėluoti ar riboti užklausas; nutrūkus ryšiui korta parodo įspėjimą.
 - Vaizdo sluoksniai ir informacijos blokai perjungiami kortos viduje ir per UI redaktorių.
-- **🔍 Žemėlapio priartinimas** – kortoje yra **+**, **−** ir **1× / mastelio atkūrimo** mygtukai. Mastelis nuo 1× iki 4×, priartintą žemėlapį galima slinkti pele ar pirštu; dvigubas paspaudimas priartina, Ctrl + pelės ratukas taip pat valdo mastelį. Visa SVG geografija, kritulių radaro, palydovo, temperatūros, GPS ir vėjo animacijos sluoksniai priartinami kartu. Pirmas „+“ nukreipia vaizdą į rodomą GPS / namų / miesto žymeklį, jei toks yra. Kortos UI redaktoriuje galima parinkti **pradinį mastelį** ir išjungti priartinimo valdiklius.
-- **📍 Vieta žemėlapyje** – numatytuoju automatinio režimo atveju per HTTPS prašoma naršyklės GPS leidimo (mėlynas taškas), o per vietinį HTTP naudojamos **Home Assistant namų koordinatės** iš HA General nustatymų (žalias taškas). Tai **ne serverio IP geolokacija**, o HA savininko įrašyta namų vieta. Taip pat galima pasirinkti miestą (oranžinis taškas) iš 10 apskričių centrų ir Biržų. Vietos šaltinį galima nustatyti kortos UI redaktoriuje arba laikinai perjungti pačios kortos žemėlapio apačioje esančiame meniu. Naršyklės GPS koordinates apdoroja tik naršyklė – jos nesiunčiamos HA serveriui. Tikslus GPS per HTTP IP paprastai neveikia, nes reikalingas HTTPS.
+- **🗺️ Navigacija ir formatas** – pasirinkite originalų, 16:9, 4:3, **1:1 kvadratinį** arba 3:4 formatą. Žemėlapį galima slinkti **ir nepritraukus**, taip pat už Lietuvos ribų. Radarui ir detaliam OpenStreetMap pagrindui dinamiškai įkeliamos matomos plytelės. Mastelis 1–4× (dvigubas spustelėjimas / Ctrl + ratukas); mastelio mygtukai paslėpti.
+- **📍 Esama vieta** – naudojamas įrenginio GPS (tik HTTPS ir gavus leidimą), o jam neveikiant – HA namų koordinatės arba `zone.home`. **„Mano vieta“** mygtukas centruoja žemėlapį ties pasirinkta vieta. Tai nėra IP geolokacija.
 
-**v0.5.10 pataisymas:** kortos vietos parinkimas ir konfigūracijos pasirinkimo meniu nebeperpiešiami per kiekvieną nesusijusį Home Assistant būsenos atnaujinimą. Atidarę sąrašą galite jį pasirinkti be mirgėjimo. Priartinimo valdikliai veikia neperkraunant žemėlapio, o slenkant priartintą žemėlapį jo neatnaujina foniniai duomenys.
+**v0.5.15 naujienos:** pasirinktiniai kortos formatai, laisvas slinkimas už Lietuvos ribų, visame pasaulyje rodomos RainViewer/OSM plytelės, namų vietos žymeklis iš `zone.home`, vietos centravimas ir spustelėtos vietos Open-Meteo sniego/temperatūros prognozė. Sniegas – modelio prognozė, ne tiesioginis matavimas.
 
-**Versija:** [v0.5.10](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.10) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.15](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.15) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -48,6 +48,10 @@ RainViewer vieša nemokama API skirta asmeniniam / mokomajam naudojimui ir turi 
 
 *Pastaba: naujos RainViewer versijos radaro kadrų keliai turi 12 simbolių identifikatorius, todėl integracija priima ir naują, ir seną URL formatą.*
 
+### Pasirenkami kortos formatai ir geografijos apžiūra
+
+Kortos redaktoriuje **Žemėlapio formatas → Kvadratinis (1:1)**. Žemėlapį slinkite pele ar pirštu, o už Lietuvos ribų radaras rodys RainViewer kritulius ten, kur šaltinis turi aprėptį. **Paspaudę bet kurią vietą**, gausite Open-Meteo temperatūros, sniego ir kritulių **modelio prognozę** tam taškui (koordinatės siunčiamos Open-Meteo paslaugai). LT72 oro pavojaus statusai ir apskričių orų imtys lieka tik Lietuvai; palydovo sluoksnis išlieka pradinės geografinės aprėpties. Bazinės žemėlapio plytelės pateikiamos OpenStreetMap su privalomu autorystės nurodymu.
+
 ### Papildomi YAML nustatymai
 
 ```yaml
@@ -56,14 +60,14 @@ layer: wind
 animated_wind: true
 wind_particles: medium # low | medium | high
 show_location: true
-show_zoom: true
+map_aspect: square  # original | wide | landscape | square | portrait
 # default_zoom: 2  # 1, 1.5, 2, 2.5, 3 arba 4
 location_mode: auto   # auto | browser | home | city
 # location_city: birzai  # only when mode is city
 show_weather_labels: true
 ```
 
-`location_mode: auto`: per HTTPS pirmiausia rodo naršyklės GPS, o jei jis neprieinamas – HA namų vietą; per HTTP iš karto rodo HA namų vietą. `location_mode: home` visada rodo HA namų vietą; `location_mode: browser` naudoja tik GPS (HTTPS), o `location_mode: city` naudoja `location_city` nustatytą miestą. Namų koordinatės skaitomos iš **Home Assistant → Settings → System → General**. Vietos rodymą galima išjungti redaktoriuje (`show_location: false`). Žymeklis matomas tik žemėlapio ribose.
+`location_mode: auto`: per HTTPS pirmiausia rodo naršyklės GPS, o jei jis neprieinamas – HA namų vietą; per HTTP iš karto rodo HA namų vietą. `location_mode: home` visada rodo HA namų vietą; `location_mode: browser` naudoja tik GPS (HTTPS), o `location_mode: city` naudoja `location_city` nustatytą miestą. Namų koordinatės skaitomos iš HA nustatymų arba `zone.home`. Vietos rodymą galima išjungti redaktoriuje (`show_location: false`). Žymeklis matomas dabartiniame žemėlapio vaizde; paspaudus „Mano vieta“ vaizdas centruojamas iš naujo.
 
 ### Debesų sluoksnio pavyzdys
 
@@ -190,4 +194,4 @@ Po atnaujinimo verta patikrinti našumą tikrame kompiuteryje, telefone ir senes
 - Jei patikimų 15 min duomenų nėra, naudojama ankstesnė `current` modelio vėjo reikšmė. Tokiu atveju detalių eilutėje rodoma `modelis dabar`; 15 min žyma neteikiama.
 - Suvidurkintas vėjo greitis ir kryptis naudojami ir dalelių animacijai. Visos **v0.5.5** našumo optimizacijos, įskaitant adaptyvų FPS ir išankstinį vėjo tinklelį, išsaugotos.
 
-Atnaujinti į `v0.5.10`: HACS → LT72 Weather Map → Update, perkrauti Home Assistant ir perkrauti naršyklės kortą (`Ctrl+F5`).
+Atnaujinti į naujausią versiją: HACS → LT72 Weather Map → Update, perkrauti Home Assistant ir prireikus atnaujinti naršyklės kortą (`Ctrl+F5`).

@@ -280,13 +280,13 @@ assert(cleanBottom.includes('<details class="source-details">'),"Sources collaps
 assert(!cleanBottom.includes('<details class="source-details" open'),"Sources must default closed");
 assert(cleanBottom.includes('<details class="source-details">'),"Sources remain accessible through disclosure");
 assert(cleanBottom.includes("ⓘ Šaltiniai"));
-card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:true,show_sources:true,maptiler_api_key:"test-key",maptiler_api_key:"test-key"});
+card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:true,show_sources:true,maptiler_api_key:"test-key"});
 assert(card.shadowRoot.innerHTML.includes('<div class="sat-guide">'));
 assert(card.shadowRoot.innerHTML.includes('OpenStreetMap contributors'));
 assert(card.shadowRoot.innerHTML.includes('class="osm-attribution"'));
 card.setConfig({type:"custom:lt72-weather-map",layer:"radar",map_theme:"dark",show_sources:false,maptiler_api_key:"test-key"});
 assert(card.shadowRoot.innerHTML.includes('class="osm-attribution"'),"OSM credit stays visible if sources row is collapsed");
-card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:true,show_sources:true});
+card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:true,show_sources:true,maptiler_api_key:"test-key"});
 assert(card.shadowRoot.innerHTML.includes('api.maptiler.com/maps/streets-v4/256/7/'));
 assert(!card.shadowRoot.innerHTML.includes('class="zoom-controls"'));;
 assert(!card.shadowRoot.innerHTML.includes('<details class="source-details">'));

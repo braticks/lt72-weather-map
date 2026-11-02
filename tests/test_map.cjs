@@ -152,7 +152,7 @@ card.setConfig({type:"custom:lt72-weather-map",region:"kauno",layer:"radar"});
 card.hass={states:{"sensor.lt72_weather":{entity_id:"sensor.lt72_weather",state:"Raudona",attributes}}};
 const visible=card.shadowRoot.innerHTML;
 assert(visible.includes("RainViewer"));
-assert(visible.includes("20 km/h"));
+assert(visible.includes("5.6 m/s"));
 assert(visible.includes("LT72"));
 assert(visible.includes('<div class="legend">'));
 assert(visible.includes('<div class="detail">'));
@@ -229,11 +229,11 @@ editor._change("show_thunderstorms",false);
 assert.equal(editor.event.detail.config.show_thunderstorms,false);
 console.log("Rain, forecast snowflakes, storm model and UI toggles passed.");
 
-card.setConfig({type:"custom:lt72-weather-map",layer:"wind",map_theme:"dark"});
+card.setConfig({type:"custom:lt72-weather-map",layer:"wind",map_theme:"dark",maptiler_api_key:"test-key"});
 const darkMap=card.shadowRoot.innerHTML;
 assert(darkMap.includes("--wmap-sea:#1d2a35"));
 assert(darkMap.includes('<div class="map" data-map-theme="dark">'));
-assert(darkMap.includes('.map[data-map-theme="dark"] .detail-tile{filter:brightness(.37) contrast(1.25) saturate(.85)}'));
+assert(darkMap.includes('.map[data-map-theme="dark"] .detail-tile{filter:none}'));
 assert(darkMap.includes('class="detail-tile"'),"Dark mode keeps detailed roads and waters");
 assert(darkMap.includes('class="neighbor-outlines"'));
 assert(darkMap.includes("Kaliningrado sritis"));
@@ -287,7 +287,7 @@ assert(card.shadowRoot.innerHTML.includes('class="osm-attribution"'));
 card.setConfig({type:"custom:lt72-weather-map",layer:"radar",map_theme:"dark",show_sources:false});
 assert(card.shadowRoot.innerHTML.includes('class="osm-attribution"'),"OSM credit stays visible if sources row is collapsed");
 card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:true,show_sources:true});
-assert(card.shadowRoot.innerHTML.includes('tile.openstreetmap.org/7/'));
+assert(card.shadowRoot.innerHTML.includes('api.maptiler.com/maps/streets-v4/256/7/'));
 assert(!card.shadowRoot.innerHTML.includes('class="zoom-controls"'));;
 assert(!card.shadowRoot.innerHTML.includes('<details class="source-details">'));
 assert(editor.shadowRoot.innerHTML.includes('data-setting="show_satellite_info"'));
@@ -355,14 +355,14 @@ card.hass={states:{"sensor.lt72_weather_map":{
  entity_id:"sensor.lt72_weather_map",state:"ok",
  last_updated:"2026-10-18T21:44:00+03:00",attributes:avgWindowAttributes
 }},locale:{language:"lt-LT"}};
-assert(card.shadowRoot.innerHTML.includes("14.5 km/h (15 min)"));
+assert(card.shadowRoot.innerHTML.includes("4.0 m/s (15 min)"));
 assert(card.shadowRoot.innerHTML.includes("15 min. modelio vid."));
 avgWindowAttributes.weather_samples.kauno.wind_window="current";
 card.hass={states:{"sensor.lt72_weather_map":{
  entity_id:"sensor.lt72_weather_map",state:"ok",
  last_updated:"2026-10-18T21:45:00+03:00",attributes:avgWindowAttributes
 }},locale:{language:"lt-LT"}};
-assert(!card.shadowRoot.innerHTML.includes("14.5 km/h (15 min)"));
+assert(!card.shadowRoot.innerHTML.includes("4.0 m/s (15 min)"));
 assert(card.shadowRoot.innerHTML.includes("modelis dabar"));
 console.log("Recent-model 15-minute wind averaging/fallback labels passed.");
 
@@ -379,6 +379,7 @@ zoomCard.hass={states:{"sensor.lt72_weather":{entity_id:"sensor.lt72_weather",st
 const zoomMarkup=zoomCard.shadowRoot.innerHTML;
 assert(zoomMarkup.includes('class="map-viewport zoomed"'));
 assert(zoomMarkup.includes('class="map-scene"'));
+assert(zoomMarkup.includes("font-size:6.50px"),"Labels shrink with zoom");
 assert(!zoomMarkup.includes('data-map-zoom="in"'));
 assert(!zoomMarkup.includes('data-map-zoom="out"'));
 assert(!zoomMarkup.includes('data-map-zoom="reset"'));
@@ -457,8 +458,10 @@ assert.equal(editor.event.detail.config.map_aspect,"square");
 assert(editor.shadowRoot.innerHTML.includes('data-select="map_aspect"'));
 const abroad=vm.runInContext('wmapProjection().xy(18,63)',ctx);
 ctx.abroad=abroad;
-const outsideTiles=vm.runInContext('wmapDetailTiles(wmapProjection(),wmapViewBounds({x:abroad[0],y:abroad[1]},1,"square",0.4))',ctx);
-assert(outsideTiles.length>0&&outsideTiles.some(t=>t.y<0),"OSM tiles follow panning beyond Lithuania");
+const outsideTiles=vm.runInContext('wmapDetailTiles(wmapProjection(),wmapViewBounds({x:abroad[0],y:abroad[1]},1,"square",0.4),1,"test-key")',ctx);
+assert(outsideTiles.length>0&&outsideTiles.some(t=>t.y<0),"MapTiler tiles follow panning beyond Lithuania");
+assert(outsideTiles.every(t=>t.url.includes("api.maptiler.com")));
+assert.equal(vm.runInContext("wmapDetailTiles().length",ctx),0,"No abusive anonymous tile fallback");
 const outsideRadar=vm.runInContext('wmapRadarTiles(radar,frame,wmapProjection(),wmapViewBounds({x:abroad[0],y:abroad[1]},1,"square",0.4))',ctx);
 assert(outsideRadar.length>0&&outsideRadar.some(t=>t.y<0),"Radar tiles follow pan beyond Lithuania");
 console.log("Square/portrait layouts, global pan and radar/OSM tile coverage passed.");
@@ -597,7 +600,7 @@ async function testAutomaticBrowserLocation(){
   ctx.fetch=async url=>{
     assert(url.includes("api.open-meteo.com/v1/forecast?"));
     return {ok:true,json:async()=>({current:{
-      snowfall:0.4,precipitation:0.8,temperature_2m:-1.2,weather_code:71
+      snowfall:0.4,precipitation:0.8,temperature_2m:-1.2,weather_code:71,wind_speed_10m:3.1,wind_gusts_10m:5.2
     }})};
   };
   const inspect=vm.runInContext("new LT72WeatherMapCard()",ctx);
@@ -607,6 +610,7 @@ async function testAutomaticBrowserLocation(){
     getBoundingClientRect:()=>({left:0,top:0,width:760,height:760})
   });
   assert(inspect.shadowRoot.innerHTML.includes("0.4 cm"));
+  assert(inspect.shadowRoot.innerHTML.includes("3.1 m/s"));
   assert(inspect.shadowRoot.innerHTML.includes("modelio prognozė"));
   assert(inspect.shadowRoot.innerHTML.includes('class="inspect-marker"'));
   console.log("Model snow inspection, zone.home fallback and GPS map marker passed.");

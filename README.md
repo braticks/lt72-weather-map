@@ -16,9 +16,11 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - **🗺️ Navigacija ir formatas** – pasirinkite originalų, 16:9, 4:3, **1:1 kvadratinį** arba 3:4 formatą. Žemėlapį galima slinkti **ir nepritraukus**, taip pat už Lietuvos ribų. Radarui ir detaliam žemėlapio pagrindui naudojamos tik matomos MapTiler plytelės su atskiru API raktu. Mastelis 1–4× (dvigubas spustelėjimas / Ctrl + ratukas); mastelio mygtukai paslėpti.
 - **📍 Esama vieta** – naudojamas įrenginio GPS (tik HTTPS ir gavus leidimą), o jam neveikiant – HA namų koordinatės arba `zone.home`. **„Mano vieta“** mygtukas centruoja žemėlapį ties pasirinkta vieta. Tai nėra IP geolokacija.
 
+**v0.5.17 pataisymai:** pasirinkus 4:3, 1:1 ar 3:4, žemėlapis užpildo visą kortos plotą be tuščių kraštų; vėjo animacijos sluoksnis, radaro ir palydovo vaizdas prisitaiko prie naujo formato. Open-Meteo 503 klaidos atveju bandoma lengvesnė užklausa be 15 min. modelio duomenų, prireikus – mažesnėmis grupėmis. Kortos JavaScript resurso versija automatiškai sutampa su integracijos versija, todėl po HA perkrovimo naršyklė gauna naują kodą.
+
 **v0.5.16 naujienos:** pasirinktiniai kortos formatai, laisvas slinkimas už Lietuvos ribų, visame pasaulyje rodomos RainViewer/MapTiler plytelės (su savo MapTiler raktu), namų vietos žymeklis iš `zone.home`, vietos centravimas ir spustelėtos vietos Open-Meteo sniego/temperatūros prognozė. Sniegas – modelio prognozė, ne tiesioginis matavimas.
 
-**Versija:** [v0.5.16](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.16) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.17](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.17) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -36,7 +38,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.16`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.17`.
 
 ## Saugumas ir informacija
 

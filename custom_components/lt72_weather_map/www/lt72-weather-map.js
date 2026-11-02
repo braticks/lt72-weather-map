@@ -347,10 +347,11 @@ function wmapWindField(samples, x, y) {
  if(!total)return null;
  return {vx:sx/total,vy:sy/total,speed:Math.hypot(sx/total,sy/total)};
 }
-function wmapLocationMarker(coords, projection=wmapProjection()) {
+function wmapLocationMarker(coords, projection=wmapProjection(), view=null) {
  if(!coords || !Number.isFinite(coords.latitude)||!Number.isFinite(coords.longitude))return null;
  const [x,y]=projection.xy(coords.longitude,coords.latitude);
- if(x<0||y<0||x>760||y>444)return null;
+ if(view?(x<view.xmin||x>view.xmax||y<view.ymin||y>view.ymax):
+   (x<0||y<0||x>760||y>444))return null;
  return {x,y};
 }
 // EUMETView infrared band is day/night consistent. GeoColour alternates
@@ -433,7 +434,7 @@ class LT72WeatherMapCard extends HTMLElement {
    if(!config||config.type!=="custom:lt72-weather-map")throw Error("Netinkamas LT72 Weather Map kortos tipas");
    const before=this._config.region;
    const previousLayer=this._config.layer;
-   const previousZoom=this._config.default_zoom,previousShowZoom=this._config.show_zoom;
+   const previousZoom=this._config.default_zoom;
    const previousLocation=JSON.stringify([this._config.location_mode,this._config.location_city,this._config.show_location]);
    this._config={...config};
    const changedLocation=previousLocation!==JSON.stringify([config.location_mode,config.location_city,config.show_location]);
@@ -448,8 +449,7 @@ class LT72WeatherMapCard extends HTMLElement {
    else if(before!==config.region)this._selected=null;
    if(this._mode===null||previousLayer!==config.layer)this._mode=config.layer||"radar";
    if(!WMAP_MODES.some(m=>m[0]===this._mode))this._mode="radar";
-   if(config.show_zoom===false)this._setMapZoom(1,380,222);
-   else if(previousZoom!==config.default_zoom||previousShowZoom===false)
+   if(previousZoom!==config.default_zoom)
      this._setMapZoom(config.default_zoom??1,380,222);
    this._render();
    if(changedLocation&&this.isConnected===true)this._checkExistingLocationPermission();
@@ -460,6 +460,8 @@ class LT72WeatherMapCard extends HTMLElement {
    // Ignore unrelated HA entity updates and the refreshed_at timestamp.
    const signature=JSON.stringify([
      value?.config?.latitude,value?.config?.longitude,
+     value?.states?.["zone.home"]?.attributes?.latitude,
+     value?.states?.["zone.home"]?.attributes?.longitude,
      entity?.entity_id,entity?.state,a.apskritis,a.apskritys,
      a.alerts_available,a.weather_samples,a.weather_available,
      a.radar,a.radar_available,a.errors
@@ -468,8 +470,8 @@ class LT72WeatherMapCard extends HTMLElement {
    this._hassSignature=signature;
    this._render();
  }
- getCardSize(){return 7;}
- getGridOptions(){return {columns:12,min_rows:5,max_rows:12};}
+ getCardSize(){return ["square","portrait"].includes(this._config.map_aspect)?11:7;}
+ getGridOptions(){return {columns:12,min_rows:5,max_rows:24};}
  _show(option){return this._config[option]!==false;}
  connectedCallback(){
    if(typeof IntersectionObserver!=="undefined"&&!this._windObserver){
@@ -506,6 +508,9 @@ class LT72WeatherMapCard extends HTMLElement {
    // Recheck after a card is detached and reattached to the dashboard.
    this._checkedGeoPermission=false;
  }
+ _mapBounds(margin=0){
+   return wmapViewBounds(this._mapCenter,this._mapZoom,this._config.map_aspect,margin);
+ }
  _mapZoomStyle(){
    const z=this._mapZoom;
    const tx=(380-z*this._mapCenter.x)/760*100;
@@ -517,7 +522,8 @@ class LT72WeatherMapCard extends HTMLElement {
    const scene=root?.querySelector?.(".map-scene");
    if(scene)scene.style.transform=this._mapZoomStyle();
    const viewport=root?.querySelector?.(".map-viewport");
-   viewport?.classList?.toggle("zoomed",this._mapZoom>1);
+   viewport?.classList?.toggle("zoomed",this._mapZoom>1||
+   Math.abs(this._mapCenter.x-380)+Math.abs(this._mapCenter.y-222)>0.5);
    const zoomIn=root?.querySelector?.('[data-map-zoom="in"]');
    const zoomOut=root?.querySelector?.('[data-map-zoom="out"]');
    const reset=root?.querySelector?.('[data-map-zoom="reset"]');
@@ -531,14 +537,17 @@ class LT72WeatherMapCard extends HTMLElement {
  _setMapZoom(value,x=this._mapCenter.x,y=this._mapCenter.y){
    const z=wmapClampMapZoom(value);
    this._mapZoom=z;
+   // Bound movement by Web Mercator's world, not Lithuania's original box.
+   const proj=wmapProjection();
+   const left=proj.xy(-179.99,0)[0],right=proj.xy(179.99,0)[0];
+   const top=proj.xy(0,85)[1],bottom=proj.xy(0,-85)[1];
    this._mapCenter={
-     x:Math.min(760-380/z,Math.max(380/z,Number.isFinite(x)?x:380)),
-     y:Math.min(444-222/z,Math.max(222/z,Number.isFinite(y)?y:222))
+     x:Math.min(right,Math.max(left,Number.isFinite(x)?x:380)),
+     y:Math.min(bottom,Math.max(top,Number.isFinite(y)?y:222))
    };
    this._refreshMapZoom();
  }
  _changeMapZoom(direction){
-   if(this._config.show_zoom===false)return;
    const steps=WMAP_MAP_ZOOM_STEPS;
    const next=direction>0?steps.find(z=>z>this._mapZoom+0.0001):
      [...steps].reverse().find(z=>z<this._mapZoom-0.0001);
@@ -550,9 +559,9 @@ class LT72WeatherMapCard extends HTMLElement {
      if(point){x=point.x;y=point.y;}
    }
    this._setMapZoom(next,x,y);
+   this._render();
  }
  _attachMapNavigation(){
-   if(this._config.show_zoom===false)return;
    const root=this.shadowRoot;
    root.querySelectorAll("[data-map-zoom]").forEach(button=>{
      button.addEventListener("click",event=>{
@@ -565,7 +574,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const viewport=root.querySelector?.(".map-viewport");
    if(!viewport)return;
    viewport.addEventListener("pointerdown",event=>{
-     if(this._mapZoom<=1||event.button!==0||this._mapDrag)return;
+     if(event.button!==0||this._mapDrag)return;
      const rect=viewport.getBoundingClientRect();
      if(!rect.width||!rect.height)return;
      this._mapDrag={id:event.pointerId,px:event.clientX,py:event.clientY,
@@ -581,7 +590,7 @@ class LT72WeatherMapCard extends HTMLElement {
      event.preventDefault();
      this._setMapZoom(this._mapZoom,
        drag.x-dx*760/(drag.w*this._mapZoom),
-       drag.y-dy*444/(drag.h*this._mapZoom));
+       drag.y-dy*760/(drag.w*this._mapZoom));
    });
    const endDrag=event=>{
      const drag=this._mapDrag;
@@ -591,7 +600,7 @@ class LT72WeatherMapCard extends HTMLElement {
        this._suppressMapClick=true;
        setTimeout(()=>{this._suppressMapClick=false;},0);
      }
-     if(this._renderPending)this._render();
+     if(drag.moved||this._renderPending)this._render();
    };
    viewport.addEventListener("pointerup",endDrag);
    viewport.addEventListener("pointercancel",endDrag);
@@ -624,12 +633,15 @@ class LT72WeatherMapCard extends HTMLElement {
    return mode==="browser"||mode==="home"?mode:"auto";
  }
  _homeCoordinates(){
-   // HA-configured home coordinates, NOT the location inferred from a local IP.
+   // Use HA's home coordinates, falling back to the standard zone.home entity.
+   // Neither source claims to be the browsing phone's GPS position.
    const conf=this._hass?.config;
-   if(conf?.latitude==null||conf?.longitude==null)return null;
-   const latitude=Number(conf.latitude),longitude=Number(conf.longitude);
+   const zone=this._hass?.states?.["zone.home"]?.attributes;
+   const coords=[conf,zone].find(c=>c?.latitude!=null&&c?.longitude!=null);
+   if(!coords)return null;
+   const latitude=Number(coords.latitude),longitude=Number(coords.longitude);
    if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||
-      latitude < -90||latitude > 90||longitude < -180||longitude > 180)return null;
+      latitude < -85||latitude > 85||longitude < -180||longitude > 180)return null;
    return {latitude,longitude};
  }
  _locationInfo(){
@@ -854,6 +866,8 @@ class LT72WeatherMapCard extends HTMLElement {
    const showThunder=(mode==="snow"||mode==="radar"||mode==="all")&&weatherReady;
    const chosenFrame=frames[this._radarIndex]||null;
    const projection=wmapProjection();
+   const visibleView=this._mapBounds();
+   const tileView=this._mapBounds(0.45);
    const theme=WMAP_THEME_COLORS[this._config.map_theme]||WMAP_THEME_COLORS.gray;
    const currentBucket=Math.floor(Date.now()/900000);
    if(this._satelliteBucket!==currentBucket){
@@ -868,7 +882,7 @@ class LT72WeatherMapCard extends HTMLElement {
      '" style="mix-blend-mode:'+(satelliteStyle==="ir"?"screen":"normal")+'"></image>' : "";
    let images="";
    if(showRadar&&chosenFrame){
-     images=wmapRadarTiles(radar,chosenFrame,projection).map(t=>
+     images=wmapRadarTiles(radar,chosenFrame,projection,tileView).map(t=>
        '<image href="'+WMAP_ESC(t.url)+'" x="'+t.x.toFixed(1)+'" y="'+t.y.toFixed(1)+
        '" width="'+t.w.toFixed(1)+'" height="'+t.h.toFixed(1)+
        '" preserveAspectRatio="none"></image>').join("");
@@ -876,7 +890,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const neighbors=this._config.show_neighbor_borders!==false&&this._neighbors?
      this._neighbors.map(c=>'<path class="neighbor" d="'+c.d+'"></path>').join("") : "";
    const detailedMap=this._config.show_map_details!==false;
-   const detailTiles=detailedMap?wmapDetailTiles(projection).map(t=>
+   const detailTiles=detailedMap?wmapDetailTiles(projection,tileView).map(t=>
      '<image class="detail-tile" href="'+WMAP_ESC(t.url)+'" x="'+t.x.toFixed(2)+
      '" y="'+t.y.toFixed(2)+'" width="'+t.w.toFixed(2)+
      '" height="'+t.h.toFixed(2)+'" preserveAspectRatio="none"></image>').join(""):"";
@@ -981,7 +995,7 @@ class LT72WeatherMapCard extends HTMLElement {
      }).join("") : "";
    const locationChoice=this._locationChoice();
    const locationInfo=this._config.show_location===false?null:this._locationInfo();
-   const locationPoint=locationInfo?wmapLocationMarker(locationInfo.coords,projection):null;
+   const locationPoint=locationInfo?wmapLocationMarker(locationInfo.coords,projection,visibleView):null;
    const locationOutside=!!locationInfo&&!locationPoint;
    const locationColor=locationInfo?.source==="home"?"#059669":
      locationInfo?.source==="city"?"#ea580c":"#2563eb";

@@ -1040,6 +1040,8 @@ class LT72WeatherMapCard extends HTMLElement {
      '</b>'+(this._show("show_subtitle")?'<small>'+WMAP_ESC(statusText)+'</small>':"")+
      '</div></div>':"";
    const toolbar=this._show("show_toolbar")?'<div class="toolbar">'+buttons+'</div>':"";
+   const osmCredit=detailedMap?
+     '<div class="osm-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></div>':"";
    const attribution='<div class="credits">'+(detailedMap?
      '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · ':'')+'Made with <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>'+
      ' · <a href="https://lt72.lt/" target="_blank" rel="noopener noreferrer">LT72</a>'+
@@ -1075,6 +1077,11 @@ class LT72WeatherMapCard extends HTMLElement {
      '.zoom-controls button{font:600 14px Roboto,Arial,sans-serif;background:transparent;color:var(--primary-text-color);border:0;border-radius:6px;min-height:30px;min-width:30px;padding:0 5px;cursor:pointer}',
      '.zoom-controls button:disabled{cursor:default;opacity:.4}',
      '.satellite-layer{pointer-events:none}',
+     '.detail-tile{pointer-events:none}',
+     // Filter base map tiles only, keeping radar and warnings at full color.
+     '.map[data-map-theme="dark"] .detail-tile{filter:brightness(.37) contrast(1.25) saturate(.85)}',
+     '.osm-attribution{position:absolute;right:5px;top:5px;z-index:3;padding:2px 4px;border-radius:3px;font:9px Roboto,Arial,sans-serif;background:rgba(20,31,43,.78);color:#fff;pointer-events:auto}',
+     '.osm-attribution a{color:#fff;text-decoration:underline}',
      '.neighbor{fill:none;stroke:var(--wmap-border);stroke-width:1.35;stroke-opacity:.48;pointer-events:none}',
      '.neighbor-label{font:500 13px Roboto,Arial,sans-serif;fill:var(--wmap-names);stroke:var(--wmap-land);stroke-width:2px;paint-order:stroke;pointer-events:none}',
      '.neighbor-land{pointer-events:none}', 
@@ -1123,7 +1130,7 @@ class LT72WeatherMapCard extends HTMLElement {
        ' style="--wmap-sea:'+theme.sea+';--wmap-land:'+theme.land+
        ';--wmap-border:'+theme.outline+';--wmap-names:'+theme.names+
        ';--wmap-county:'+theme.county+';--wmap-label:'+theme.label+'">',header,toolbar,
-     '<div class="map">',
+     '<div class="map" data-map-theme="'+WMAP_ESC(this._config.map_theme||"gray")+'">',
      this._error?'<div class="missing">'+WMAP_ESC(this._error)+'</div>':
      !this._regions?'<div class="missing">Įkeliamas Lietuvos žemėlapis...</div>':
        '<div class="map-viewport'+(this._mapZoom>1?' zoomed':'')+'">'+
@@ -1135,7 +1142,7 @@ class LT72WeatherMapCard extends HTMLElement {
              countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+'</svg>'+
            (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':"")+
          '</div></div>',
-     locationButton,locationPicker,zoomControls,
+     locationButton,locationPicker,zoomControls,osmCredit,
      (mapMissing?'<div class="overlay-alert">⚠ '+WMAP_ESC(mode==="radar"?
        "Radaro duomenys nepasiekiami":"Orų prognozės nepasiekiamos")+'</div>':""),
      '</div>',

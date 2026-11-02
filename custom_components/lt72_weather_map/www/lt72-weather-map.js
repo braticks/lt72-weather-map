@@ -165,7 +165,7 @@ function wmapDetailTiles(proj=wmapProjection()){
      if(x<0||y<0||x>=2**z||y>=2**z)continue;
      const [px,py,w,h]=proj.tileRect(x/factor,y/factor);
      if(px+w<=0||py+h<=0||px>=760||py>=444)continue;
-     tiles.push({url:"https://tile.openstreetmap.org/"+z+"/"+x+"/"+y+".png",x:px,y:py,w,h});
+     tiles.push({url:"https://tile.openstreetmap.org/"+z+"/"+x+"/"+y+".png",x:px,y:py,w:w/factor,h:h/factor});
    }
  }
  return tiles;

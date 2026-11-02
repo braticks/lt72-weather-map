@@ -105,7 +105,7 @@ const WMAP_FLAGS=[
  ["show_thunderstorms","Rodyti prognozuojamą perkūniją ⚡"],
  ["show_toolbar","Rodyti sluoksnių perjungimą"],
  ["show_location","Rodyti „Mano vieta“ žymeklį"],
- ["show_zoom","Rodyti žemėlapio priartinimo mygtukus"],
+ ["show_map_details","Rodyti upes, ežerus ir pagrindinius kelius"],
  ["animated_wind","Animuoti vėjo judėjimą"]
 ];
 const WMAP_URL="/lt72_weather_map/";
@@ -153,6 +153,22 @@ function wmapProjection(){
              WMAP_TILE*scale,WMAP_TILE*scale];
    }
  };
+}
+// OSM standard raster tiles: rivers, lakes and main roads; correct attribution
+// is displayed under the map. Browser caching reduces repeat downloads.
+function wmapDetailTiles(proj=wmapProjection()){
+ const z=7, factor=2**(z-WMAP_ZOOM);
+ const {xmin,xmax,ymin,ymax}=proj.tileBounds;
+ const tiles=[];
+ for(let x=(xmin+1)*factor-2;x<=(xmax-1)*factor+1;x++){
+   for(let y=(ymin+1)*factor-2;y<=(ymax-1)*factor+1;y++){
+     if(x<0||y<0||x>=2**z||y>=2**z)continue;
+     const [px,py,w,h]=proj.tileRect(x/factor,y/factor);
+     if(px+w<=0||py+h<=0||px>=760||py>=444)continue;
+     tiles.push({url:"https://tile.openstreetmap.org/"+z+"/"+x+"/"+y+".png",x:px,y:py,w,h});
+   }
+ }
+ return tiles;
 }
 function wmapDecode(topo){
  const {arcs,transform,objects}=topo;
@@ -826,6 +842,11 @@ class LT72WeatherMapCard extends HTMLElement {
    }
    const neighbors=this._config.show_neighbor_borders!==false&&this._neighbors?
      this._neighbors.map(c=>'<path class="neighbor" d="'+c.d+'"></path>').join("") : "";
+   const detailedMap=this._config.show_map_details!==false;
+   const detailTiles=detailedMap?wmapDetailTiles(projection).map(t=>
+     '<image class="detail-tile" href="'+WMAP_ESC(t.url)+'" x="'+t.x.toFixed(2)+
+     '" y="'+t.y.toFixed(2)+'" width="'+t.w.toFixed(2)+
+     '" height="'+t.h.toFixed(2)+'" preserveAspectRatio="none"></image>').join(""):"";
    const neighborBase=this._neighbors?
      '<g class="neighbor-land">'+this._neighbors.map(c=>
        '<path d="'+c.d+'" fill="var(--wmap-land)" stroke="none"></path>').join("")+'</g>' : "";
@@ -960,14 +981,8 @@ class LT72WeatherMapCard extends HTMLElement {
        "HA namų koordinatės nenustatytos – pasirinkite miestą.":"")
    );
    const animateWind=showWind&&this._config.animated_wind!==false;
-   const zoomControls=this._config.show_zoom===false||!this._regions?"": 
-     '<div class="zoom-controls" role="group" aria-label="Žemėlapio mastelis">'+
-     '<button type="button" data-map-zoom="out" aria-label="Atitolinti" title="Atitolinti"'+
-       (this._mapZoom<=1?' disabled':'')+'>−</button>'+
-     '<button type="button" data-map-zoom="reset" aria-label="Atkurti Lietuvos vaizdą" title="Atkurti visą vaizdą"'+
-       (this._mapZoom<=1?' disabled':'')+'>'+this._mapZoom+'×</button>'+
-     '<button type="button" data-map-zoom="in" aria-label="Priartinti" title="Priartinti"'+
-       (this._mapZoom>=4?' disabled':'')+'>+</button></div>';
+   // Hide zoom buttons while keeping gestures and drag navigation.
+   const zoomControls="";
    const buttons=WMAP_MODES.map(m=>
      '<button class="mode '+(mode===m[0]?'active':'')+'" data-mode="'+m[0]+
      '" type="button">'+WMAP_ESC(m[1])+'</button>').join("");
@@ -1025,7 +1040,8 @@ class LT72WeatherMapCard extends HTMLElement {
      '</b>'+(this._show("show_subtitle")?'<small>'+WMAP_ESC(statusText)+'</small>':"")+
      '</div></div>':"";
    const toolbar=this._show("show_toolbar")?'<div class="toolbar">'+buttons+'</div>':"";
-   const attribution='<div class="credits">Made with <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>'+
+   const attribution='<div class="credits">'+(detailedMap?
+     '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · ':'')+'Made with <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>'+
      ' · <a href="https://lt72.lt/" target="_blank" rel="noopener noreferrer">LT72</a>'+
      ' · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>'+
      ((mode==="radar"||mode==="all")?
@@ -1114,7 +1130,7 @@ class LT72WeatherMapCard extends HTMLElement {
          '<div class="map-scene" style="transform:'+this._mapZoomStyle()+'">'+
            '<svg viewBox="0 0 760 444" aria-label="LT72 pavojaus ir orų žemėlapis" role="img">'+
              '<rect x="0" y="0" width="760" height="444" fill="var(--wmap-sea)"></rect>'+
-             neighborBase+satelliteImage+images+
+             neighborBase+detailTiles+satelliteImage+images+
              '<g class="neighbor-outlines">'+neighbors+'</g>'+
              countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+'</svg>'+
            (animateWind?'<canvas class="wind-canvas" width="760" height="444" aria-hidden="true"></canvas>':"")+
@@ -1257,7 +1273,7 @@ class LT72WeatherMapEditor extends HTMLElement {
      ...WMAP_MAP_ZOOM_STEPS.map(z=>
        '<option value="'+z+'"'+(wmapClampMapZoom(current.default_zoom)===z?' selected':'')+'>'+z+'×</option>'),
      '</select></label>',
-     '<p>Žemėlapio + / − / mastelio mygtukai rodomi, kai įjungtas „Rodyti žemėlapio priartinimo mygtukus“. Priartintą žemėlapį galima slinkti pirštu arba pele.</p>',
+     '<p>Priartinimas: dvigubas spustelėjimas, Ctrl + pelės ratukas. Priartintą žemėlapį galima slinkti pele arba pirštu. Atskirų mastelio mygtukų nėra.</p>',
      '<h4>Mano vieta žemėlapyje</h4>',
      '<label class="field"><span>Vietos šaltinis</span><select data-select="location_mode">',
      ...WMAP_LOCATION_MODES.map(([id,name])=>

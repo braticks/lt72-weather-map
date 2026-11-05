@@ -170,14 +170,21 @@ card.setConfig({type:"custom:lt72-weather-map",layer:"snow"});
 assert.equal(card._mode,"snow");
 console.log("All 10 counties, weather overlays, RainViewer tiles and UI editor passed.");
 
-// The map displays the browsing device's GPS dot (and offers a retry button).
-assert(visible.includes('data-locate="true"'));
-assert(visible.includes('data-location-choice'));
+// Minimal map defaults to a marker only; controls can be enabled in the editor.
+assert(!visible.includes('data-locate="true"'));
+assert(!visible.includes('data-location-choice'));
+assert(!visible.includes('data-recenter="true"'));
+card.setConfig({type:"custom:lt72-weather-map",layer:"radar",show_location_controls:true});
+assert(card.shadowRoot.innerHTML.includes('data-locate="true"'));
+assert(card.shadowRoot.innerHTML.includes('data-location-choice'));
 card.setConfig({type:"custom:lt72-weather-map",layer:"wind"});
 assert(card.shadowRoot.innerHTML.includes('class="wind-canvas"'));
 card._devicePosition={latitude:54.93,longitude:23.90,accuracy:50};
 card.setConfig({type:"custom:lt72-weather-map",layer:"wind"});
 assert(card.shadowRoot.innerHTML.includes('class="device-location"'));
+assert(card.shadowRoot.innerHTML.includes('class="location-pulse"'),
+  "GPS dot has animated halo");
+assert(card.shadowRoot.innerHTML.includes('class="location-pulse location-pulse-delayed"'));
 card.setConfig({type:"custom:lt72-weather-map",layer:"wind",show_location:false,animated_wind:false});
 assert(!card.shadowRoot.innerHTML.includes('data-locate="true"'));
 assert(!card.shadowRoot.innerHTML.includes('class="wind-canvas"'));
@@ -188,6 +195,10 @@ editor._change("animated_wind",true);
 assert.equal(Object.hasOwn(editor.event.detail.config,"animated_wind"),false);
 editor._change("show_location",false);
 assert.equal(editor.event.detail.config.show_location,false);
+editor._change("show_location_controls",true);
+assert.equal(editor.event.detail.config.show_location_controls,true);
+editor._change("show_location_controls",false);
+assert.equal(Object.hasOwn(editor.event.detail.config,"show_location_controls"),false);
 editor._change("wind_particles","high");
 assert.equal(editor.event.detail.config.wind_particles,"high");
 console.log("GPS permissions UI, position projection, wind field and animation switches passed.");
@@ -276,16 +287,16 @@ console.log("Consistent IR satellite, daylight/night GeoColour option, opacity a
 card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:false,show_sources:false});
 const cleanBottom=card.shadowRoot.innerHTML;
 assert(!cleanBottom.includes('<div class="sat-guide">'),"Satellite info hidden");
-assert(cleanBottom.includes('<details class="source-details">'),"Sources collapse into a disclosure");
-assert(!cleanBottom.includes('<details class="source-details" open'),"Sources must default closed");
-assert(cleanBottom.includes('<details class="source-details">'),"Sources remain accessible through disclosure");
-assert(cleanBottom.includes("ⓘ Šaltiniai"));
+assert(!cleanBottom.includes('class="source-details"'),"Disabled sources have no disclosure");
+assert(!cleanBottom.includes("ⓘ Šaltiniai"));
+assert(!cleanBottom.includes('class="credits"'),"No optional footer when sources are hidden");
 card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:true,show_sources:true,maptiler_api_key:"test-key"});
 assert(card.shadowRoot.innerHTML.includes('<div class="sat-guide">'));
 assert(card.shadowRoot.innerHTML.includes('OpenStreetMap contributors'));
 assert(card.shadowRoot.innerHTML.includes('class="osm-attribution"'));
 card.setConfig({type:"custom:lt72-weather-map",layer:"radar",map_theme:"dark",show_sources:false,maptiler_api_key:"test-key"});
-assert(card.shadowRoot.innerHTML.includes('class="osm-attribution"'),"OSM credit stays visible if sources row is collapsed");
+assert(card.shadowRoot.innerHTML.includes('class="osm-attribution"'),"Required OSM credit remains visible even without sources footer");
+assert(!card.shadowRoot.innerHTML.includes('class="credits"'));
 card.setConfig({type:"custom:lt72-weather-map",layer:"satellite",show_satellite_info:true,show_sources:true,maptiler_api_key:"test-key"});
 assert(card.shadowRoot.innerHTML.includes('api.maptiler.com/maps/streets-v4/256/7/'));
 assert(!card.shadowRoot.innerHTML.includes('class="zoom-controls"'));;
@@ -299,7 +310,7 @@ editor._change("show_sources",false);
 assert.equal(editor.event.detail.config.show_sources,false);
 editor._change("wind_visibility","vivid");
 assert.equal(editor.event.detail.config.wind_visibility,"vivid");
-console.log("50m neighbor borders, optional footers, source disclosure, visible wind settings passed.");
+console.log("50m neighbor borders, hidden optional sources, required map attribution and wind settings passed.");
 
 card.setConfig({type:"custom:lt72-weather-map",layer:"radar"});
 const fiveCityHtml=card.shadowRoot.innerHTML;
@@ -487,7 +498,7 @@ console.log("Square/portrait layouts, global pan and radar/OSM tile coverage pas
 // Regression: geolocation/state updates must not close an open map selector.
 const focusCard=vm.runInContext("new LT72WeatherMapCard()",ctx);
 focusCard._regions=paths;
-focusCard.setConfig({type:"custom:lt72-weather-map",location_mode:"home"});
+focusCard.setConfig({type:"custom:lt72-weather-map",location_mode:"home",show_location_controls:true});
 focusCard.shadowRoot.activeElement={tagName:"SELECT"};
 const oldCardMarkup=focusCard.shadowRoot.innerHTML;
 focusCard._devicePosition={latitude:54.9,longitude:23.9,accuracy:10};
@@ -580,15 +591,21 @@ async function testAutomaticBrowserLocation(){
   home.hass={config:{latitude:54.8985,longitude:23.9036},states:{}};
   assert(home.shadowRoot.innerHTML.includes("Home Assistant namų vieta (ne GPS)"));
   assert(home.shadowRoot.innerHTML.includes('class="device-location"'));
-  assert(home.shadowRoot.innerHTML.includes('data-location-choice'));
+  assert(!home.shadowRoot.innerHTML.includes('data-location-choice'));
   assert(home.shadowRoot.innerHTML.includes('fill="#059669"'));
+  assert(home.shadowRoot.innerHTML.includes('class="location-pulse"'),
+    "Home Assistant home location pulses too");
+  assert(!home.shadowRoot.innerHTML.includes('data-recenter="true"'));
+  home.setConfig({type:"custom:lt72-weather-map",location_mode:"home",show_location_controls:true});
+  assert(home.shadowRoot.innerHTML.includes('data-location-choice'));
   assert(home.shadowRoot.innerHTML.includes('data-recenter="true"'));
   const zoneFallback=vm.runInContext("new LT72WeatherMapCard()",ctx);
   zoneFallback._regions=paths;
   zoneFallback.setConfig({type:"custom:lt72-weather-map",location_mode:"auto"});
   zoneFallback.hass={config:{},states:{"zone.home":{entity_id:"zone.home",attributes:{latitude:54.8985,longitude:23.9036}}}};
   assert(zoneFallback.shadowRoot.innerHTML.includes('class="device-location"'),"HA zone.home restores marker");
-  assert(zoneFallback.shadowRoot.innerHTML.includes('data-recenter="true"'));
+  assert(!zoneFallback.shadowRoot.innerHTML.includes('data-recenter="true"'));
+  assert(zoneFallback.shadowRoot.innerHTML.includes('class="location-pulse"'));
 
   home.setConfig({type:"custom:lt72-weather-map",location_mode:"auto"});
   home.connectedCallback();
@@ -596,7 +613,7 @@ async function testAutomaticBrowserLocation(){
   assert(home.shadowRoot.innerHTML.includes('class="device-location"'));
   home.disconnectedCallback();
 
-  home.setConfig({type:"custom:lt72-weather-map",location_mode:"city",location_city:"birzai"});
+  home.setConfig({type:"custom:lt72-weather-map",location_mode:"city",location_city:"birzai",show_location_controls:true});
   assert(home.shadowRoot.innerHTML.includes("Biržai (pasirinktas miestas)"));
   assert(home.shadowRoot.innerHTML.includes('value="city:birzai" selected'));
   assert(home.shadowRoot.innerHTML.includes('fill="#ea580c"'));
@@ -612,6 +629,7 @@ async function testAutomaticBrowserLocation(){
   editorHome.setConfig({type:"custom:lt72-weather-map"});
   assert(editorHome.shadowRoot.innerHTML.includes('data-select="location_mode"'));
   assert(editorHome.shadowRoot.innerHTML.includes('data-select="location_city"'));
+  assert(editorHome.shadowRoot.innerHTML.includes('data-setting="show_location_controls"'));
   editorHome._change("location_mode","city");
   editorHome._change("location_city","birzai");
   assert.equal(editorHome.event.detail.config.location_city,"birzai");

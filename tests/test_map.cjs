@@ -259,6 +259,29 @@ assert(!minimalMap.includes('class="neighbor"'));
 assert(minimalMap.includes('class="neighbor-land"'));
 editor._change("map_theme","blue");
 assert.equal(editor.event.detail.config.map_theme,"blue");
+assert.equal(vm.runInContext("WMAP_MAP_THEMES.length",ctx),27);
+assert.equal(vm.runInContext("new Set(WMAP_MAP_THEMES.map(t=>t[0])).size",ctx),27);
+assert(vm.runInContext("new Set(WMAP_MAP_THEMES.map(t=>t[2])).size",ctx)>=20);
+for(const [id,style] of [
+ ["gray","streets-v4"],["dark","streets-v4-dark"],
+ ["streets_pastel","streets-v4-pastel"],["base_dark","base-v4-dark"],
+ ["topo","topo-v4"],["outdoor","outdoor-v4"],["winter","winter-v4"],
+ ["satellite","satellite-v4"],["hybrid","hybrid-v4"],
+ ["toner","toner-v2"],["aquarelle","aquarelle-v4"],["ocean","ocean-v4"]
+]){
+ assert.equal(vm.runInContext('wmapThemeStyle('+JSON.stringify(id)+')',ctx),style);
+ const tiles=vm.runInContext('wmapDetailTiles(wmapProjection(),null,1,"test-key",'+JSON.stringify(id)+')',ctx);
+ assert(tiles.length>0&&tiles.every(t=>t.url.includes("/maps/"+style+"/256/")));
+}
+assert.equal(vm.runInContext('wmapThemeStyle("unlisted")',ctx),"streets-v4");
+const groupedEditor=vm.runInContext("new LT72WeatherMapEditor()",ctx);
+groupedEditor.setConfig({type:"custom:lt72-weather-map",map_theme:"hybrid"});
+assert(groupedEditor.shadowRoot.innerHTML.includes('<optgroup label="Palydoviniai">'));
+assert(groupedEditor.shadowRoot.innerHTML.includes('value="hybrid" selected'));
+card.setConfig({type:"custom:lt72-weather-map",map_theme:"hybrid",maptiler_api_key:"test-key"});
+assert(card.shadowRoot.innerHTML.includes("/maps/hybrid-v4/256/"));
+assert(card.shadowRoot.innerHTML.includes("--wmap-sea:#1d2a35"));
+assert.equal(vm.runInContext('wmapWindStyle("hybrid","strong").ink',ctx),"231,249,255");
 editor._change("show_neighbor_borders",false);
 assert.equal(editor.event.detail.config.show_neighbor_borders,false);
 console.log("Neighboring country polygons, map themes and strength-dependent wind animation passed.");

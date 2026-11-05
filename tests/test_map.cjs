@@ -282,6 +282,45 @@ card.setConfig({type:"custom:lt72-weather-map",map_theme:"hybrid",maptiler_api_k
 assert(card.shadowRoot.innerHTML.includes("/maps/hybrid-v4/256/"));
 assert(card.shadowRoot.innerHTML.includes("--wmap-sea:#1d2a35"));
 assert.equal(vm.runInContext('wmapWindStyle("hybrid","strong").ink',ctx),"231,249,255");
+const autoTheme={type:"custom:lt72-weather-map",map_theme_mode:"sun",
+  map_theme:"gray",map_theme_day:"topo",map_theme_night:"hybrid",
+  layer:"wind",maptiler_api_key:"test-key"};
+assert.equal(vm.runInContext('wmapActiveTheme({map_theme:"blue"},"below_horizon")',ctx),"blue",
+  "Old cards stay on their selected fixed theme");
+assert.equal(vm.runInContext('wmapActiveTheme({map_theme_mode:"sun",map_theme:"gray"},"above_horizon")',ctx),"light");
+assert.equal(vm.runInContext('wmapActiveTheme({map_theme_mode:"sun",map_theme:"gray"},"below_horizon")',ctx),"dark");
+assert.equal(vm.runInContext('wmapActiveTheme({map_theme_mode:"sun",map_theme:"gray"},"unknown")',ctx),"gray");
+const autoEditor=vm.runInContext("new LT72WeatherMapEditor()",ctx);
+autoEditor.setConfig(autoTheme);
+assert(autoEditor.shadowRoot.innerHTML.includes('data-select="map_theme_mode"'));
+assert(autoEditor.shadowRoot.innerHTML.includes('data-select="map_theme_day"'));
+assert(autoEditor.shadowRoot.innerHTML.includes('data-select="map_theme_night"'));
+assert(autoEditor.shadowRoot.innerHTML.includes('value="topo" selected'));
+assert(autoEditor.shadowRoot.innerHTML.includes('value="hybrid" selected'));
+autoEditor._change("map_theme_night","base_dark");
+assert.equal(autoEditor.event.detail.config.map_theme_night,"base_dark");
+autoEditor.setConfig({type:"custom:lt72-weather-map",map_theme:"dark"});
+assert(!autoEditor.shadowRoot.innerHTML.includes('data-select="map_theme_day"'));
+assert(!autoEditor.shadowRoot.innerHTML.includes('data-select="map_theme_night"'));
+const hassBeforeSun=card._hass;
+card.setConfig(autoTheme);
+card.hass={...hassBeforeSun,states:{...hassBeforeSun.states,
+  "sun.sun":{entity_id:"sun.sun",state:"above_horizon",attributes:{}}}};
+assert(card.shadowRoot.innerHTML.includes('data-map-theme="topo"'));
+assert(card.shadowRoot.innerHTML.includes("/maps/topo-v4/256/"));
+assert(card.shadowRoot.innerHTML.includes("--wmap-sea:#dbeaf0"));
+card.hass={...card._hass,states:{...card._hass.states,
+  "sun.sun":{entity_id:"sun.sun",state:"below_horizon",attributes:{}}}};
+assert(card.shadowRoot.innerHTML.includes('data-map-theme="hybrid"'),
+  "Sun state changes must redraw the basemap");
+assert(card.shadowRoot.innerHTML.includes("/maps/hybrid-v4/256/"));
+assert(card.shadowRoot.innerHTML.includes("--wmap-sea:#1d2a35"));
+card.hass={...card._hass,states:{...card._hass.states,
+  "sun.sun":{entity_id:"sun.sun",state:"unavailable",attributes:{}}}};
+assert(card.shadowRoot.innerHTML.includes('data-map-theme="gray"'),
+  "Unavailable sun entity must preserve the configured fallback");
+card.hass=hassBeforeSun;
+console.log("Automatic sunrise/sunset map themes and fallback passed.");
 editor._change("show_neighbor_borders",false);
 assert.equal(editor.event.detail.config.show_neighbor_borders,false);
 console.log("Neighboring country polygons, map themes and strength-dependent wind animation passed.");

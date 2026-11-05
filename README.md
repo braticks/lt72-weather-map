@@ -16,6 +16,8 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - **🗺️ Navigacija ir formatas** – pasirinkite originalų, 16:9, 4:3, **1:1 kvadratinį** arba 3:4 formatą. Žemėlapį galima slinkti **ir nepritraukus**, taip pat už Lietuvos ribų. Radarui ir detaliam žemėlapio pagrindui naudojamos tik matomos MapTiler plytelės su atskiru API raktu. Mastelis 1–4× (dvigubas spustelėjimas / Ctrl + ratukas); mastelio mygtukai paslėpti.
 - **📍 Esama vieta** – naudojamas įrenginio GPS (tik HTTPS ir gavus leidimą), o jam neveikiant – HA namų koordinatės arba `zone.home`. Vietos žymeklis pulsuoja; vietos pasirinkimo ir centravimo valdikliai pagal nutylėjimą paslėpti, bet juos galima įjungti kortos nustatymuose. Tai nėra IP geolokacija.
 
+**v0.5.20 naujienos:** pasirinktinės automatinės dienos ir nakties žemėlapio temos. Kortos redaktoriuje pasirinkite **Temos keitimas → Automatiškai pagal saulėtekį ir saulėlydį**, tada atskirai nustatykite dienos ir nakties temas iš 27 variantų. Naudojama Home Assistant `sun.sun` būsena; jei ji neprieinama, lieka atsarginė tema. Esamos kortos lieka rankiniu režimu, kol jo neįjungsite.
+
 **v0.5.19 naujienos:** 27 žemėlapio temos (23 naujos) šešiose grupėse: gatvių, minimalistiniai, topografiniai, turistiniai, palydoviniai ir meniniai MapTiler stiliai. Pasirinkta tema keičia tikrą žemėlapio pagrindą, o ne vien kortos spalvas; senieji `gray`, `light`, `dark`, `blue` nustatymai išlieka suderinami. Detaliems žemėlapiams reikalingas MapTiler API raktas ir taikomos tiekėjo kvotos.
 
 **v0.5.18 pataisymai:** paslėpti nereikalingi vietos valdikliai („Mano vieta“, GPS ir vietos pasirinkimas), paliktas pulsuojantis vietos žymeklis (taip pat HA namų vietai). Kai `show_sources: false`, visiškai paslepiama apatinė „Šaltiniai“ eilutė. Privaloma OpenStreetMap / MapTiler autorystė pačiame žemėlapyje išlieka.
@@ -24,7 +26,7 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 
 **v0.5.16 naujienos:** pasirinktiniai kortos formatai, laisvas slinkimas už Lietuvos ribų, visame pasaulyje rodomos RainViewer/MapTiler plytelės (su savo MapTiler raktu), namų vietos žymeklis iš `zone.home`, vietos centravimas ir spustelėtos vietos Open-Meteo sniego/temperatūros prognozė. Sniegas – modelio prognozė, ne tiesioginis matavimas.
 
-**Versija:** [v0.5.19](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.19) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.20](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.20) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -42,7 +44,7 @@ region: kauno
 layer: radar
 ```
 
-Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.19`.
+Kortos resursas registruojamas automatiškai saugojimo (storage) režimu; YAML režimu pridėkite JavaScript module `/lt72_weather_map/lt72-weather-map.js?v=0.5.20`.
 
 ## Saugumas ir informacija
 
@@ -132,6 +134,22 @@ map_theme: topo  # Pavyzdžiai: gray | dark | streets_pastel | topo | outdoor | 
 show_neighbor_borders: true
 show_neighbor_labels: true
 animated_wind: true
+```
+
+### Automatinės dienos ir nakties temos (v0.5.20)
+
+Kortos redaktoriuje **Temos keitimas → Automatiškai pagal saulėtekį ir saulėlydį** pasirinkite atskiras temas:
+- **Dienos tema:** kai `sun.sun` būsena `above_horizon`.
+- **Nakties tema:** kai `sun.sun` būsena `below_horizon`.
+
+Tai vyksta automatiškai pagal Home Assistant nustatytos namų vietos saulėtekį ir saulėlydį, ne pagal fiksuotas valandas. Jei `sun.sun` neprieinamas, naudojama **atsarginė tema** (`map_theme`). Automatinis režimas yra pasirinktinis, todėl senos kortos nepasikeičia.
+
+```yaml
+type: custom:lt72-weather-map
+map_theme_mode: sun
+map_theme_day: light
+map_theme_night: dark
+map_theme: gray  # atsarginė tema, jei sun.sun neprieinamas
 ```
 
 ### Palydovo vaizdo sutvarkymas (v0.5.1)

@@ -61,12 +61,206 @@ const WMAP_WIND_VISIBILITY=[
  ["strong","Ryškus (rekomenduojama)"],
  ["vivid","Labai ryškus"]
 ];
+// [id, label, MapTiler raster style, fallback palette, editor group].
+// Fixed allowlisted styles: no user-controlled URL paths.
 const WMAP_MAP_THEMES=[
- ["gray","Pilkas (Windy stilius)"],
- ["light","Šviesus"],
- ["dark","Tamsus"],
- ["blue","Melsvas"]
+ [
+  "gray",
+  "Pilkas (Windy stilius)",
+  "streets-v4",
+  "gray",
+  "Klasikiniai"
+ ],
+ [
+  "light",
+  "Šviesus",
+  "streets-v4",
+  "light",
+  "Klasikiniai"
+ ],
+ [
+  "dark",
+  "Tamsus",
+  "streets-v4-dark",
+  "dark",
+  "Klasikiniai"
+ ],
+ [
+  "blue",
+  "Melsvas",
+  "streets-v4",
+  "blue",
+  "Klasikiniai"
+ ],
+ [
+  "streets",
+  "Gatvės – klasikinis",
+  "streets-v4",
+  "light",
+  "Miestai ir keliai"
+ ],
+ [
+  "streets_pastel",
+  "Gatvės – pastelinės",
+  "streets-v4-pastel",
+  "light",
+  "Miestai ir keliai"
+ ],
+ [
+  "osm",
+  "OpenStreetMap stilius",
+  "openstreetmap-v2",
+  "light",
+  "Miestai ir keliai"
+ ],
+ [
+  "voyager",
+  "Voyager – kelionėms",
+  "voyager-v2",
+  "blue",
+  "Miestai ir keliai"
+ ],
+ [
+  "base",
+  "Minimalus – spalvotas",
+  "base-v4",
+  "light",
+  "Minimalistiniai"
+ ],
+ [
+  "base_light",
+  "Minimalus – šviesus",
+  "base-v4-light",
+  "light",
+  "Minimalistiniai"
+ ],
+ [
+  "base_dark",
+  "Minimalus – tamsus",
+  "base-v4-dark",
+  "dark",
+  "Minimalistiniai"
+ ],
+ [
+  "backdrop",
+  "Backdrop – neutralus",
+  "backdrop-v4",
+  "gray",
+  "Minimalistiniai"
+ ],
+ [
+  "backdrop_dark",
+  "Backdrop – tamsus",
+  "backdrop-v4-dark",
+  "dark",
+  "Minimalistiniai"
+ ],
+ [
+  "dataviz",
+  "Duomenų žemėlapis – šviesus",
+  "dataviz-v4",
+  "light",
+  "Minimalistiniai"
+ ],
+ [
+  "dataviz_dark",
+  "Duomenų žemėlapis – tamsus",
+  "dataviz-v4-dark",
+  "dark",
+  "Minimalistiniai"
+ ],
+ [
+  "topo",
+  "Topografinis",
+  "topo-v4",
+  "light",
+  "Gamta ir reljefas"
+ ],
+ [
+  "topo_dark",
+  "Topografinis – tamsus",
+  "topo-v4-dark",
+  "dark",
+  "Gamta ir reljefas"
+ ],
+ [
+  "outdoor",
+  "Turistinis (Outdoor)",
+  "outdoor-v4",
+  "light",
+  "Gamta ir reljefas"
+ ],
+ [
+  "outdoor_dark",
+  "Turistinis – tamsus",
+  "outdoor-v4-dark",
+  "dark",
+  "Gamta ir reljefas"
+ ],
+ [
+  "landscape",
+  "Reljefas (Landscape)",
+  "landscape-v4",
+  "light",
+  "Gamta ir reljefas"
+ ],
+ [
+  "winter",
+  "Žieminis",
+  "winter-v4",
+  "light",
+  "Gamta ir reljefas"
+ ],
+ [
+  "winter_dark",
+  "Žieminis – tamsus",
+  "winter-v4-dark",
+  "dark",
+  "Gamta ir reljefas"
+ ],
+ [
+  "satellite",
+  "Palydovinis – nuotraukos",
+  "satellite-v4",
+  "dark",
+  "Palydoviniai"
+ ],
+ [
+  "hybrid",
+  "Palydovinis – su keliais",
+  "hybrid-v4",
+  "dark",
+  "Palydoviniai"
+ ],
+ [
+  "toner",
+  "Toner – juodai baltas",
+  "toner-v2",
+  "light",
+  "Meniniai ir specialūs"
+ ],
+ [
+  "aquarelle",
+  "Akvarelė",
+  "aquarelle-v4",
+  "light",
+  "Meniniai ir specialūs"
+ ],
+ [
+  "ocean",
+  "Vandenynai ir gyliai",
+  "ocean-v4",
+  "blue",
+  "Meniniai ir specialūs"
+ ]
 ];
+const WMAP_MAP_THEME_GROUPS=["Klasikiniai","Miestai ir keliai","Minimalistiniai",
+ "Gamta ir reljefas","Palydoviniai","Meniniai ir specialūs"];
+function wmapThemeInfo(theme){
+ return WMAP_MAP_THEMES.find(entry=>entry[0]===theme)||WMAP_MAP_THEMES[0];
+}
+function wmapThemeStyle(theme){return wmapThemeInfo(theme)[2];}
+function wmapThemePalette(theme){return wmapThemeInfo(theme)[3];}
 // Map aspect presets keep geographic geometry in correct proportions.
 const WMAP_MAP_ASPECTS=[
  ["original","Originalus (760:444)","760 / 444"],
@@ -193,6 +387,7 @@ function wmapTileBounds(proj,view){
 // Community-rendered MapTiler tiles; request visible tiles only and show both credits.
 function wmapDetailTiles(proj=wmapProjection(),view=null,zoom=1,key="",theme="gray"){
  if(!key||typeof key!=="string")return [];
+ const style=wmapThemeStyle(theme);
  const z=Math.min(9,7+Math.floor(Math.log2(Math.max(1,Number(zoom)||1))));
  const factor=2**(z-WMAP_ZOOM);
  const {xmin,xmax,ymin,ymax}=wmapTileBounds(proj,view);
@@ -203,7 +398,7 @@ function wmapDetailTiles(proj=wmapProjection(),view=null,zoom=1,key="",theme="gr
      const [px,py,w,h]=proj.tileRect(x/factor,y/factor);
      if(view&&(px+w/factor<view.xmin||py+h/factor<view.ymin||
        px>view.xmax||py>view.ymax))continue;
-     tiles.push({url:"https://api.maptiler.com/maps/"+(theme==="dark"?"streets-v4-dark":"streets-v4")+"/256/"+z+"/"+x+"/"+y+".png?key="+encodeURIComponent(key),
+     tiles.push({url:"https://api.maptiler.com/maps/"+style+"/256/"+z+"/"+x+"/"+y+".png?key="+encodeURIComponent(key),
        x:px,y:py,w:w/factor,h:h/factor});
    }
  }
@@ -262,7 +457,8 @@ function wmapNeighborPaths(geometry, proj=wmapProjection()){
  }).filter(f=>f.d.startsWith("M"));
 }
 function wmapWindStyle(theme,visibility){
- const bright=theme==="dark"||theme==="gray";
+ const paletteKey=wmapThemePalette(theme);
+ const bright=paletteKey==="dark"||paletteKey==="gray";
  const palette=bright?"231,249,255":"22,75,128";
  const mode=["normal","strong","vivid"].includes(visibility)?visibility:"strong";
  return {
@@ -933,7 +1129,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const sceneHeight=Number((sceneView.ymax-sceneView.ymin).toFixed(2));
    const visibleView=this._mapBounds();
    const tileView=this._mapBounds(0.08);
-   const theme=WMAP_THEME_COLORS[this._config.map_theme]||WMAP_THEME_COLORS.gray;
+   const theme=WMAP_THEME_COLORS[wmapThemePalette(this._config.map_theme)];
    const currentBucket=Math.floor(Date.now()/900000);
    if(this._satelliteBucket!==currentBucket){
      this._satelliteBucket=currentBucket;
@@ -1444,10 +1640,14 @@ class LT72WeatherMapEditor extends HTMLElement {
      '<label class="field"><span>MapTiler API raktas (detaliam žemėlapiui)</span><input type="text" data-setting-text="maptiler_api_key" value="'+WMAP_ESC(current.maptiler_api_key||"")+'" placeholder="MapTiler API key"></label>',
      '<p>MapTiler turi atskiras naudojimo sąlygas ir kvotas. Be rakto rodoma bazinė geografija ir orų sluoksniai, o ne užblokuotos žemėlapio plytelės.</p>',
      '<label class="field"><span>Žemėlapio tema</span><select data-select="map_theme">',
-     ...WMAP_MAP_THEMES.map(([id,name])=>
-       '<option value="'+id+'"'+((current.map_theme||"gray")===id?' selected':'')+'>'+
-       WMAP_ESC(name)+'</option>'),
+     ...WMAP_MAP_THEME_GROUPS.map(group=>
+       '<optgroup label="'+WMAP_ESC(group)+'">'+
+       WMAP_MAP_THEMES.filter(entry=>entry[4]===group).map(([id,name])=>
+         '<option value="'+id+'"'+((current.map_theme||"gray")===id?' selected':'')+'>'+
+         WMAP_ESC(name)+'</option>').join("")+
+       '</optgroup>'),
      '</select></label>',
+     '<p>27 žemėlapio temos (23 naujos). MapTiler stiliams reikalingas API raktas ir galioja tiekėjo užklausų kvotos. Be rakto keičiasi tik bazinės spalvos.</p>',
      '<h4>Žemėlapio priartinimas</h4>',
      '<label class="field"><span>Pradinis priartinimas</span><select data-select="default_zoom">',
      ...WMAP_MAP_ZOOM_STEPS.map(z=>

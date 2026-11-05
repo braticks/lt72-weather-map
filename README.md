@@ -16,13 +16,15 @@ Neoficiali Home Assistant integracija su **vienu Lietuvos žemėlapiu**: LT72 pe
 - **🗺️ Navigacija ir formatas** – pasirinkite originalų, 16:9, 4:3, **1:1 kvadratinį** arba 3:4 formatą. Žemėlapį galima slinkti **ir nepritraukus**, taip pat už Lietuvos ribų. Radarui ir detaliam žemėlapio pagrindui naudojamos tik matomos MapTiler plytelės su atskiru API raktu. Mastelis 1–4× (dvigubas spustelėjimas / Ctrl + ratukas); mastelio mygtukai paslėpti.
 - **📍 Esama vieta** – naudojamas įrenginio GPS (tik HTTPS ir gavus leidimą), o jam neveikiant – HA namų koordinatės arba `zone.home`. Vietos žymeklis pulsuoja; vietos pasirinkimo ir centravimo valdikliai pagal nutylėjimą paslėpti, bet juos galima įjungti kortos nustatymuose. Tai nėra IP geolokacija.
 
+**v0.5.19 naujienos:** 27 žemėlapio temos (23 naujos) šešiose grupėse: gatvių, minimalistiniai, topografiniai, turistiniai, palydoviniai ir meniniai MapTiler stiliai. Pasirinkta tema keičia tikrą žemėlapio pagrindą, o ne vien kortos spalvas; senieji `gray`, `light`, `dark`, `blue` nustatymai išlieka suderinami. Detaliems žemėlapiams reikalingas MapTiler API raktas ir taikomos tiekėjo kvotos.
+
 **v0.5.18 pataisymai:** paslėpti nereikalingi vietos valdikliai („Mano vieta“, GPS ir vietos pasirinkimas), paliktas pulsuojantis vietos žymeklis (taip pat HA namų vietai). Kai `show_sources: false`, visiškai paslepiama apatinė „Šaltiniai“ eilutė. Privaloma OpenStreetMap / MapTiler autorystė pačiame žemėlapyje išlieka.
 
 **v0.5.17 pataisymai:** pasirinkus 4:3, 1:1 ar 3:4, žemėlapis užpildo visą kortos plotą be tuščių kraštų; vėjo animacijos sluoksnis, radaro ir palydovo vaizdas prisitaiko prie naujo formato. Open-Meteo 503 klaidos atveju bandoma lengvesnė užklausa be 15 min. modelio duomenų, prireikus – mažesnėmis grupėmis. Kortos JavaScript resurso versija automatiškai sutampa su integracijos versija, todėl po HA perkrovimo naršyklė gauna naują kodą.
 
 **v0.5.16 naujienos:** pasirinktiniai kortos formatai, laisvas slinkimas už Lietuvos ribų, visame pasaulyje rodomos RainViewer/MapTiler plytelės (su savo MapTiler raktu), namų vietos žymeklis iš `zone.home`, vietos centravimas ir spustelėtos vietos Open-Meteo sniego/temperatūros prognozė. Sniegas – modelio prognozė, ne tiesioginis matavimas.
 
-**Versija:** [v0.5.18](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.18) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
+**Versija:** [v0.5.19](https://github.com/braticks/lt72-weather-map/releases/tag/v0.5.19) · [Visi leidimai](https://github.com/braticks/lt72-weather-map/releases)
 
 **Ikona:** `custom_components/lt72_weather_map/brand/icon.png` (HA integracijai) ir `icon.svg` (GitHub README). HACS katalogo peržiūroje ikonos atvaizdavimas gali vėluoti.
 
@@ -106,23 +108,27 @@ show_thunderstorms: true
 show_precip_legend: true
 ```
 
-### Kaimyninės šalys ir žemėlapio temos (v0.5.0)
+### Kaimyninės šalys ir žemėlapio temos (v0.5.19)
 
-Žemėlapio foną ir kaimyninių valstybių kontūrus galima keisti **viename kortos UI redaktoriuje**:
+Kortos UI redaktoriuje galima rinktis iš **27 temų**, suskirstytų į šešias grupes:
 
-- **Pilkas** – „Windy“ įkvėptas pilkų atspalvių fonas;
-- **Šviesus** – neutralus, šviesus jūros ir žemės fonas;
-- **Tamsus** – tamsi tema;
-- **Melsvas** – melsvi jūros ir žemės atspalviai.
+- **Klasikiniai:** Pilkas, Šviesus, Tamsus, Melsvas (ankstesni nustatymai išsaugoti).
+- **Miestai ir keliai:** Streets, Streets Pastel, OpenStreetMap, Voyager.
+- **Minimalistiniai:** Base, Base Light/Dark, Backdrop, Backdrop Dark, Dataviz Light/Dark.
+- **Gamta ir reljefas:** Topo Light/Dark, Outdoor Light/Dark, Landscape, Winter Light/Dark.
+- **Palydoviniai:** Satellite, Hybrid (su keliais ir pavadinimais).
+- **Meniniai:** Toner, Aquarelle, Ocean.
 
-Fone yra **Lenkijos, Latvijos, Baltarusijos, Kaliningrado srities** ir kitų pakraštyje pasitaikančių valstybių administracinės sienos. Ribų šaltinis: [Natural Earth 1:110m Countries](https://www.naturalearthdata.com/downloads/110m-cultural-vectors/110m-admin-0-countries/) (public domain), supaprastintas ir nukirptas iki Lietuvos apylinkių. Kaimyninių šalių sienos specialiai blankesnės už Lietuvos apskritis. **Tai ne gatvių žemėlapis ar tikslus sienų matavimo šaltinis.** Internete jokių fono žemėlapių plytelių ir API raktų nereikia.
+Naujos temos keičia **tikras MapTiler rastrines žemėlapio plyteles**, o ne tik fono spalvas. Tam reikia MapTiler API rakto. Rastrinėms plytelėms gali būti taikomi mokamo plano apribojimai, kvotos ir tiekėjo naudojimo sąlygos. Be rakto lieka vietinė geografija, orų sluoksniai ir spalvų paletės.
+
+Fone yra **Lenkijos, Latvijos, Baltarusijos, Kaliningrado srities** ir kitų pakraštyje pasitaikančių valstybių administracinės sienos. Ribų šaltinis: [Natural Earth 1:110m Countries](https://www.naturalearthdata.com/downloads/110m-cultural-vectors/110m-admin-0-countries/) (public domain), supaprastintas ir nukirptas iki Lietuvos apylinkių. Kaimyninių šalių sienos specialiai blankesnės už Lietuvos apskritis. **Vietinės kontūrų ribos nėra tikslus sienų matavimo šaltinis.** Detalioms MapTiler plytelėms API raktas reikalingas; be jo rodomi vietiniai kontūrai.
 
 Vėjo animacijos dalelės dabar juda proporcingai interpoliuotam Open-Meteo **km/h** greičiui: esant labai silpnam vėjui animacija praktiškai sustoja, o stipresnis vėjas juda sparčiau, su ilgesniu ir ryškesniu pėdsaku. Tai vizualus modelis (ne Windy vėjo lauko rezoliucija).
 
 ```yaml
 type: custom:lt72-weather-map
 layer: wind
-map_theme: gray  # gray | light | dark | blue
+map_theme: topo  # Pavyzdžiai: gray | dark | streets_pastel | topo | outdoor | satellite | hybrid
 show_neighbor_borders: true
 show_neighbor_labels: true
 animated_wind: true

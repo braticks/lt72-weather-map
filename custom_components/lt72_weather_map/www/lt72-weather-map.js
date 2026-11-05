@@ -119,6 +119,7 @@ const WMAP_FLAGS=[
  ["show_thunderstorms","Rodyti prognozuojamą perkūniją ⚡"],
  ["show_toolbar","Rodyti sluoksnių perjungimą"],
  ["show_location","Rodyti „Mano vieta“ žymeklį"],
+ ["show_location_controls","Rodyti vietos valdiklius žemėlapyje"],
  ["show_map_details","Rodyti upes, ežerus ir pagrindinius kelius"],
  ["animated_wind","Animuoti vėjo judėjimą"]
 ];
@@ -1074,25 +1075,31 @@ class LT72WeatherMapCard extends HTMLElement {
    const deviceMarker=locationPoint?
      '<g class="device-location" role="img" aria-label="'+WMAP_ESC(locationInfo.label)+'">'+
        '<circle cx="'+locationPoint.x.toFixed(1)+'" cy="'+locationPoint.y.toFixed(1)+
-       '" r="15" fill="'+locationColor+'" fill-opacity=".15" stroke="'+locationColor+
-       '" stroke-width="1.5"'+(locationInfo.source==="browser"?' class="gps-pulse"':"")+'></circle>'+
+       '" r="14" fill="'+locationColor+'" fill-opacity=".20"></circle>'+
+       '<circle class="location-pulse" cx="'+locationPoint.x.toFixed(1)+
+       '" cy="'+locationPoint.y.toFixed(1)+'" r="9" fill="none" stroke="'+
+       locationColor+'" stroke-width="2.4"></circle>'+
+       '<circle class="location-pulse location-pulse-delayed" cx="'+locationPoint.x.toFixed(1)+
+       '" cy="'+locationPoint.y.toFixed(1)+'" r="9" fill="none" stroke="'+
+       locationColor+'" stroke-width="2.4"></circle>'+
        '<circle cx="'+locationPoint.x.toFixed(1)+'" cy="'+locationPoint.y.toFixed(1)+
        '" r="6" fill="'+locationColor+'" stroke="#fff" stroke-width="2.5"></circle>'+
        '<title>'+WMAP_ESC(locationInfo.label)+'</title></g>':"";
-   const locationPicker=this._config.show_location===false?"":'<label class="location-picker" title="Vietos pasirinkimas">'+
+   const showLocationControls=this._config.show_location!==false&&this._config.show_location_controls===true;
+   const locationPicker=!showLocationControls?"":'<label class="location-picker" title="Vietos pasirinkimas">'+
      '📍 <select data-location-choice aria-label="Vieta žemėlapyje">'+
      WMAP_LOCATION_MODES.filter(m=>m[0]!=="city").map(m=>
        '<option value="'+m[0]+'"'+(locationChoice===m[0]?' selected':'')+'>'+WMAP_ESC(m[1])+'</option>').join("")+
      WMAP_LOCATION_CITIES.map(c=>
        '<option value="city:'+c[0]+'"'+(locationChoice==="city:"+c[0]?' selected':'')+'>'+WMAP_ESC(c[1])+'</option>').join("")+
      '</select></label>';
-   const recenterButton=locationInfo&&this._config.show_location!==false?
+   const recenterButton=locationInfo&&showLocationControls?
      '<button type="button" class="recenter-button" data-recenter="true" title="Rodyti mano vietą žemėlapyje">📍 Mano vieta</button>':"";
-   const locationButton=this._config.show_location===false||
+   const locationButton=!showLocationControls||
      !["auto","browser"].includes(locationChoice)||
      (typeof window!=="undefined"&&window.isSecureContext===false)?"":'<button type="button" class="locate-button" data-locate="true"'+
      ' title="Pakartoti naršyklės GPS nustatymą">⌖ GPS</button>';
-   const locationNote=this._config.show_location===false?"":(
+   const locationNote=!showLocationControls?"":(
      locationChoice==="auto"&&locationInfo?.source==="home"?
        "Rodoma HA namų vieta (ne įrenginio GPS)."+(
          typeof window!=="undefined"&&window.isSecureContext===false?" GPS reikalingas HTTPS.":""):
@@ -1185,9 +1192,8 @@ class LT72WeatherMapCard extends HTMLElement {
      (showSatellite?' · Palydovas © <a href="https://www.eumetsat.int/" target="_blank" rel="noopener noreferrer">EUMETSAT</a>'+
        (satelliteStyle==="geocolour"?'/NASA':""):'')+
      '</div>';
-   const sourcesMarkup=this._show("show_sources")?attribution:
-     '<details class="source-details"><summary title="Duomenų šaltiniai">ⓘ Šaltiniai</summary>'+
-       attribution+'</details>';
+   // Optional full data-source list; mandatory basemap attribution stays on the map.
+   const sourcesMarkup=this._config.show_sources===false?"":attribution;
    const explanatory=this._show("show_disclaimer")?
      '<div class="fineprint">Balta be pranešimo ≠ oficialus atšaukimas. '+
      'Pilka = nepasiekiama. Radaras rodo stebėtus kritulius, o palydovas – debesų dangą; vėjas, snaigės ir ⚡ perkūnijos žymekliai – modelio prognozė, NE tikri žaibo smūgiai. '+
@@ -1225,8 +1231,10 @@ class LT72WeatherMapCard extends HTMLElement {
      '.recenter-button{position:absolute;z-index:4;left:9px;top:9px;padding:6px 8px;border:1px solid var(--divider-color);border-radius:8px;background:var(--card-background-color,#fff);color:var(--primary-text-color);font-size:11px;cursor:pointer}',
      '.location-picker{position:absolute;z-index:4;bottom:9px;right:9px;display:flex;align-items:center;gap:4px;max-width:65%;font-size:11px;padding:5px 7px;border:1px solid var(--divider-color);border-radius:8px;background:var(--card-background-color,#fff);color:var(--primary-text-color);box-shadow:0 1px 4px #0003}',
      '.location-picker select{font:inherit;color:inherit;background:transparent;border:0;max-width:100%;min-width:0;cursor:pointer}',
-     '.gps-pulse{transform-box:fill-box;transform-origin:center;animation:gpsPulse 2s ease-in-out infinite}',
-     '@keyframes gpsPulse{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:.85;transform:scale(1.25)}}',
+     '.location-pulse{transform-box:fill-box;transform-origin:center;animation:locationPulse 2.4s ease-out infinite;opacity:0;pointer-events:none}',
+     '.location-pulse-delayed{animation-delay:1.2s}',
+     '@keyframes locationPulse{0%{transform:scale(.65);opacity:.9}75%,100%{transform:scale(3.1);opacity:0}}',
+     '@media(prefers-reduced-motion:reduce){.location-pulse{animation:none;opacity:.3}}',
      '.map-scene svg{width:100%;height:100%;display:block;max-height:none;overflow:visible}',
      '.county-label{font:600 13px Roboto,Arial,sans-serif;fill:var(--wmap-label);paint-order:stroke;stroke:var(--wmap-land);stroke-width:3px;stroke-linejoin:round;pointer-events:none}',
      '.city-temperature{pointer-events:none;filter:drop-shadow(0 1px 1px #0005)}',
@@ -1381,6 +1389,7 @@ class LT72WeatherMapEditor extends HTMLElement {
  _change(key,value){
    const next={...this._config};
    if(key==="compact"){if(value)next.compact=true;else delete next.compact;}
+   else if(key==="show_location_controls"){if(value)next[key]=true;else delete next[key];}
    else if(key.startsWith("show_")||key==="animated_wind"){if(value)delete next[key];else next[key]=false;}
    else{if(value)next[key]=value;else delete next[key];}
    this._config=next;
@@ -1398,7 +1407,7 @@ class LT72WeatherMapEditor extends HTMLElement {
      s.entity_id.startsWith("sensor.")&&s.attributes?.saltinis==="LT72 Weather Map"):[];
    const flags=WMAP_FLAGS.map(([id,label])=>
      '<label><input type="checkbox" data-setting="'+id+'"'+
-     (current[id]!==false?' checked':'')+'>'+WMAP_ESC(label)+'</label>').join("");
+     ((id==="show_location_controls"?current[id]===true:current[id]!==false)?' checked':'')+'>'+WMAP_ESC(label)+'</label>').join("");
    root.innerHTML=[
      '<style>',
      ':host{font-family:var(--primary-font-family);color:var(--primary-text-color);display:block;font-size:13px}',
@@ -1454,7 +1463,7 @@ class LT72WeatherMapEditor extends HTMLElement {
      ...WMAP_LOCATION_CITIES.map(c=>
        '<option value="'+c[0]+'"'+((current.location_city||"kauno")===c[0]?' selected':'')+'>'+WMAP_ESC(c[1])+'</option>'),
      '</select></label>',
-     '<p>Automatiškai: HTTPS atveju, gavus leidimą, naudojama įrenginio GPS vieta. Jei ji neprieinama, rodoma HA namų vieta (įskaitant zone.home). Mygtukas „Mano vieta“ sugrąžina žemėlapį į šią vietą.</p>',
+     '<p>Automatiškai: HTTPS atveju, gavus leidimą, naudojama įrenginio GPS vieta. Jei ji neprieinama, rodoma HA namų vieta (įskaitant zone.home). Vietos žymeklis pulsuoja; vietos valdikliai pagal nutylėjimą paslėpti.</p>',
      '<h4>Palydoviniai debesys</h4>',
      '<label class="field"><span>Palydovo vaizdo tipas</span><select data-select="satellite_style">',
      ...WMAP_SATELLITE_STYLES.map(([id,name])=>
@@ -1484,7 +1493,7 @@ class LT72WeatherMapEditor extends HTMLElement {
      '</select></label>',
      '<h4>Išdėstymas</h4><label class="compact"><input type="checkbox" data-setting="compact"'+
        (current.compact?' checked':'')+'>Kompaktiška korta</label>',
-     '<p>LT72 pavojaus perspėjimų neatstoja. Radarą teikia RainViewer, prognozes – Open-Meteo. Šaltinių priskyrimas rodomas visada.</p>'
+     '<p>LT72 pavojaus perspėjimų neatstoja. Radarą teikia RainViewer, prognozes – Open-Meteo. Žemėlapio tiekėjo autorystė lieka matoma pačiame žemėlapyje.</p>'
    ].join("");
    root.querySelectorAll("[data-setting-text]").forEach(el=>
      el.addEventListener("change",()=>this._change(el.getAttribute("data-setting-text"),el.value)));

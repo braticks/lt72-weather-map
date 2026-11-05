@@ -261,6 +261,23 @@ function wmapThemeInfo(theme){
 }
 function wmapThemeStyle(theme){return wmapThemeInfo(theme)[2];}
 function wmapThemePalette(theme){return wmapThemeInfo(theme)[3];}
+// Use HA's sun.sun rather than a fixed clock hour, so the map follows
+// sunrise and sunset at the configured Home Assistant location.
+function wmapActiveTheme(config={},sunState=null){
+ const fixed=wmapThemeInfo(config.map_theme)[0];
+ if(config.map_theme_mode!=="sun")return fixed;
+ if(sunState==="above_horizon")return wmapThemeInfo(config.map_theme_day||"light")[0];
+ if(sunState==="below_horizon")return wmapThemeInfo(config.map_theme_night||"dark")[0];
+ return fixed; // No sun state: keep the manually configured fallback.
+}
+function wmapThemeOptions(selected){
+ return WMAP_MAP_THEME_GROUPS.map(group=>
+   '<optgroup label="'+WMAP_ESC(group)+'">'+
+   WMAP_MAP_THEMES.filter(entry=>entry[4]===group).map(([id,name])=>
+     '<option value="'+id+'"'+(selected===id?' selected':'')+'>'+
+     WMAP_ESC(name)+'</option>').join("")+
+   '</optgroup>').join("");
+}
 // Map aspect presets keep geographic geometry in correct proportions.
 const WMAP_MAP_ASPECTS=[
  ["original","Originalus (760:444)","760 / 444"],
@@ -674,6 +691,7 @@ class LT72WeatherMapCard extends HTMLElement {
      value?.config?.latitude,value?.config?.longitude,
      value?.states?.["zone.home"]?.attributes?.latitude,
      value?.states?.["zone.home"]?.attributes?.longitude,
+     value?.states?.["sun.sun"]?.state,
      entity?.entity_id,entity?.state,a.apskritis,a.apskritys,
      a.alerts_available,a.weather_samples,a.weather_available,
      a.radar,a.radar_available,a.errors
@@ -1020,7 +1038,9 @@ class LT72WeatherMapCard extends HTMLElement {
    const windGrid=wmapBuildWindGrid(samples,28,{
      xmin:0,xmax:760,ymin:sceneTop,ymax:sceneBottom
    });
-   const appearance=wmapWindStyle(this._config.map_theme,this._config.wind_visibility);
+   const appearance=wmapWindStyle(
+     wmapActiveTheme(this._config,this._hass?.states?.["sun.sun"]?.state),
+     this._config.wind_visibility);
    const counts={low:75,medium:140,high:220};
    const count=Math.max(24,Math.round((counts[this._config.wind_particles]||140)*appearance.density*preset.density));
    context.lineCap="round";
@@ -1129,7 +1149,8 @@ class LT72WeatherMapCard extends HTMLElement {
    const sceneHeight=Number((sceneView.ymax-sceneView.ymin).toFixed(2));
    const visibleView=this._mapBounds();
    const tileView=this._mapBounds(0.08);
-   const theme=WMAP_THEME_COLORS[wmapThemePalette(this._config.map_theme)];
+   const activeTheme=wmapActiveTheme(this._config,this._hass?.states?.["sun.sun"]?.state);
+   const theme=WMAP_THEME_COLORS[wmapThemePalette(activeTheme)];
    const currentBucket=Math.floor(Date.now()/900000);
    if(this._satelliteBucket!==currentBucket){
      this._satelliteBucket=currentBucket;
@@ -1152,7 +1173,7 @@ class LT72WeatherMapCard extends HTMLElement {
      this._neighbors.map(c=>'<path class="neighbor" d="'+c.d+'"></path>').join("") : "";
    const detailedMap=this._config.show_map_details!==false&&
       !!this._config.maptiler_api_key;
-   const detailTiles=detailedMap?wmapDetailTiles(projection,tileView,this._mapZoom,this._config.maptiler_api_key,this._config.map_theme).map(t=>
+   const detailTiles=detailedMap?wmapDetailTiles(projection,tileView,this._mapZoom,this._config.maptiler_api_key,activeTheme).map(t=>
      '<image class="detail-tile" href="'+WMAP_ESC(t.url)+'" x="'+t.x.toFixed(2)+
      '" y="'+t.y.toFixed(2)+'" width="'+t.w.toFixed(2)+
      '" height="'+t.h.toFixed(2)+'" preserveAspectRatio="none"></image>').join(""):"";
@@ -1478,7 +1499,7 @@ class LT72WeatherMapCard extends HTMLElement {
        ' style="--wmap-sea:'+theme.sea+';--wmap-land:'+theme.land+
        ';--wmap-border:'+theme.outline+';--wmap-names:'+theme.names+
        ';--wmap-county:'+theme.county+';--wmap-label:'+theme.label+'">',header,toolbar,
-     '<div class="map" data-map-theme="'+WMAP_ESC(this._config.map_theme||"gray")+'">',
+     '<div class="map" data-map-theme="'+WMAP_ESC(activeTheme)+'">',
      this._error?'<div class="missing">'+WMAP_ESC(this._error)+'</div>':
      !this._regions?'<div class="missing">Įkeliamas Lietuvos žemėlapis...</div>':
        '<div class="map-viewport'+(this._mapZoom>1?' zoomed':'')+'" style="--wmap-aspect:'+wmapAspectValue(this._config.map_aspect)+'">'+
@@ -1639,14 +1660,22 @@ class LT72WeatherMapEditor extends HTMLElement {
      '</select></label>',
      '<label class="field"><span>MapTiler API raktas (detaliam žemėlapiui)</span><input type="text" data-setting-text="maptiler_api_key" value="'+WMAP_ESC(current.maptiler_api_key||"")+'" placeholder="MapTiler API key"></label>',
      '<p>MapTiler turi atskiras naudojimo sąlygas ir kvotas. Be rakto rodoma bazinė geografija ir orų sluoksniai, o ne užblokuotos žemėlapio plytelės.</p>',
-     '<label class="field"><span>Žemėlapio tema</span><select data-select="map_theme">',
-     ...WMAP_MAP_THEME_GROUPS.map(group=>
-       '<optgroup label="'+WMAP_ESC(group)+'">'+
-       WMAP_MAP_THEMES.filter(entry=>entry[4]===group).map(([id,name])=>
-         '<option value="'+id+'"'+((current.map_theme||"gray")===id?' selected':'')+'>'+
-         WMAP_ESC(name)+'</option>').join("")+
-       '</optgroup>'),
+     '<label class="field"><span>Temos keitimas</span><select data-select="map_theme_mode">',
+     '<option value="fixed"'+(current.map_theme_mode!=="sun"?' selected':'')+'>Viena tema (rankiniu būdu)</option>',
+     '<option value="sun"'+(current.map_theme_mode==="sun"?' selected':'')+'>Automatiškai pagal saulėtekį ir saulėlydį</option>',
      '</select></label>',
+     '<label class="field"><span>'+(current.map_theme_mode==="sun"?'Atsarginė tema (jei sun.sun nepasiekiamas)':'Žemėlapio tema')+'</span><select data-select="map_theme">',
+     wmapThemeOptions(current.map_theme||"gray"),
+     '</select></label>',
+     ...(current.map_theme_mode==="sun"?[
+       '<label class="field"><span>☀️ Dienos tema (saulė pakilusi)</span><select data-select="map_theme_day">',
+       wmapThemeOptions(current.map_theme_day||"light"),
+       '</select></label>',
+       '<label class="field"><span>🌙 Nakties tema (saulė nusileidusi)</span><select data-select="map_theme_night">',
+       wmapThemeOptions(current.map_theme_night||"dark"),
+       '</select></label>',
+       '<p>Naudojama Home Assistant sun.sun būsena. Tema persijungia saulei pakilus ar nusileidus. Jei sun.sun neprieinamas, rodoma atsarginė tema.</p>'
+     ]:[]),
      '<p>27 žemėlapio temos (23 naujos). MapTiler stiliams reikalingas API raktas ir galioja tiekėjo užklausų kvotos. Be rakto keičiasi tik bazinės spalvos.</p>',
      '<h4>Žemėlapio priartinimas</h4>',
      '<label class="field"><span>Pradinis priartinimas</span><select data-select="default_zoom">',

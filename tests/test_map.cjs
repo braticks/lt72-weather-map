@@ -577,10 +577,10 @@ async function testAutomaticBrowserLocation(){
   ctx.window.isSecureContext=false;
   const insecure=vm.runInContext("new LT72WeatherMapCard()",ctx);
   insecure._regions=paths;
-  insecure.setConfig({type:"custom:lt72-weather-map"});
+  insecure.setConfig({type:"custom:lt72-weather-map",show_location_controls:true});
   insecure.connectedCallback();
   assert(insecure.shadowRoot.innerHTML.includes("HA namų koordinatės nenustatytos"));
-  insecure.setConfig({type:"custom:lt72-weather-map",location_mode:"browser"});
+  insecure.setConfig({type:"custom:lt72-weather-map",location_mode:"browser",show_location_controls:true});
   insecure._checkExistingLocationPermission();
   assert(insecure.shadowRoot.innerHTML.includes("HTTPS adresas"));
   assert.equal(requests,1,"Insecure HTTP must not start geolocation");
@@ -607,7 +607,7 @@ async function testAutomaticBrowserLocation(){
   assert(!zoneFallback.shadowRoot.innerHTML.includes('data-recenter="true"'));
   assert(zoneFallback.shadowRoot.innerHTML.includes('class="location-pulse"'));
 
-  home.setConfig({type:"custom:lt72-weather-map",location_mode:"auto"});
+  home.setConfig({type:"custom:lt72-weather-map",location_mode:"auto",show_location_controls:true});
   home.connectedCallback();
   assert(home.shadowRoot.innerHTML.includes("Rodoma HA namų vieta"));
   assert(home.shadowRoot.innerHTML.includes('class="device-location"'));

@@ -655,15 +655,15 @@ function wmapIsThunderForecast(forecast) {
  if(!forecast || forecast.weather_code==null)return false;
  return [95,96,97,99].includes(Number(forecast.weather_code));
 }
-function wmapSnowCluster(shape) {
+function wmapSnowCluster(shape, zoom=1) {
  // High-contrast SVG snow marker, independent of emoji fonts and basemap colors.
- return '<g class="snow-cluster" transform="translate('+shape.x.toFixed(1)+','+
-   shape.y.toFixed(1)+')" aria-label="Sniego prognozė: '+WMAP_ESC(shape.name)+'">'+
-   '<circle r="17" fill="#075985" fill-opacity=".94" stroke="#ffffff" stroke-width="2.5"></circle>'+
-   '<g stroke="#ffffff" stroke-width="2.3" stroke-linecap="round">'+
+ return '<g class="snow-cluster" transform="translate('+shape.x.toFixed(1)+','+shape.y.toFixed(1)+') scale('+scale.toFixed(2)+')" aria-label="Sniego prognozė: '+WMAP_ESC(shape.name)+'">'+
+   '<circle r="20" fill="#003b74" stroke="white" stroke-width="3"></circle>'+
+   '<circle r="16" fill="#117cce"></circle>'+
+   '<g stroke="white" stroke-width="3" stroke-linecap="round">'+
    '<path d="M-11 0H11 M0-11V11 M-8-8L8 8 M-8 8L8-8"></path>'+
    '<path d="M-11-4L-7 0L-11 4 M11-4L7 0L11 4 M-4-11L0-7L4-11 M-4 11L0 7L4 11"></path>'+
-   '</g><title>❄ Prognozuojamas sniegas – Open-Meteo modelis</title></g>';
+   '</g><title>Prognozuojamas sniegas</title></g>';
 }
 function wmapRadarTiles(meta,frame,proj=wmapProjection(),view=null){
  const host=String(meta?.host||"");
@@ -1293,9 +1293,8 @@ class LT72WeatherMapCard extends HTMLElement {
      const snow=showSnow&&this._show("show_snowflakes")&&wmapIsSnowForecast(w);
      const thunder=showThunder&&this._show("show_thunderstorms")&&wmapIsThunderForecast(w);
      if(!snow&&!thunder)return "";
-     const clipId="wmap-clip-"+s.key;
-     const defs='<defs><clipPath id="'+clipId+'"><path d="'+s.d+'"></path></clipPath></defs>';
-     const flakes=snow?'<g clip-path="url(#'+clipId+')">'+wmapSnowCluster(s)+'</g>':"";
+     const defs="";
+     const flakes=snow?wmapSnowCluster(s,this._mapZoom):"";
      const bolt=thunder?'<g class="thunder-forecast" transform="translate('+
        s.x.toFixed(1)+','+(s.y-8).toFixed(1)+')">'+
        '<circle r="15" fill="rgba(26,32,44,.68)" stroke="#facc15" stroke-width="1.5"></circle>'+
@@ -1554,7 +1553,7 @@ class LT72WeatherMapCard extends HTMLElement {
              '<rect x="0" y="'+sceneTop+'" width="760" height="'+sceneHeight+'" fill="var(--wmap-sea)"></rect>'+
              neighborBase+detailTiles+satelliteImage+images+
              '<g class="neighbor-outlines">'+neighbors+'</g>'+
-             countryLabels+regionsHtml+municipalityHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+inspectMarker+'</svg>'+
+             countryLabels+regionsHtml+municipalityHtml+weatherHtml+cityTemperatures+forecastSymbols+deviceMarker+inspectMarker+'</svg>'+
            (animateWind?'<canvas class="wind-canvas" width="760" height="'+Math.round(sceneHeight)+'" aria-hidden="true"></canvas>':"")+
          '</div></div></div>',
      locationButton,recenterButton,locationPicker,zoomControls,osmCredit,

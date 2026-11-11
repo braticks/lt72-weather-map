@@ -1126,6 +1126,11 @@ class LT72WeatherMapCard extends HTMLElement {
    const activeAlerts=!!data.alerts_available, weatherReady=!!data.weather_available;
    const radarReady=!!data.radar_available;
    const alerts=activeAlerts?data.apskritys||{}:{};
+   const territoryAlerts=activeAlerts&&Array.isArray(data.teritorijos)?data.teritorijos:[];
+   const territoryNotice=territoryAlerts.filter(t=>["red","yellow","yellow_after_red"].includes(t.kodas))
+     .map(t=>'<span style="display:inline-block;margin:2px 6px 2px 0;padding:3px 6px;border-radius:5px;border-left:4px solid '+
+       (WMAP_LEVELS[t.kodas]?.[1]||"#999")+'">'+WMAP_ESC(t.teritorija||"Nenurodyta teritorija")+
+       ' · '+WMAP_ESC(WMAP_LEVELS[t.kodas]?.[0]||t.kodas)+'</span>').join("");
    const weather=weatherReady?data.weather_samples||{}:{};
    const radar=radarReady?data.radar||{}:{};
    const frames=Array.isArray(radar.frames)?radar.frames:[];
@@ -1517,6 +1522,7 @@ class LT72WeatherMapCard extends HTMLElement {
      '</div>',
      (locationNote?'<div class="geo-note">'+WMAP_ESC(locationNote)+'</div>':""),
      inspectText,
+     (territoryNotice?'<div class="territory-alerts" style="padding:6px;font-size:12px"><strong>LT72 perspėjimai pagal teritorijas:</strong><div>'+territoryNotice+'</div></div>':""),
      timeline,precipitationGuide,satelliteGuide,details,legend,explanatory,sourcesMarkup,
      '</ha-card>'
    ].join("");

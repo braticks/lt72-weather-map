@@ -656,15 +656,11 @@ function wmapIsThunderForecast(forecast) {
  return [95,96,97,99].includes(Number(forecast.weather_code));
 }
 function wmapSnowCluster(shape, zoom=1) {
- // High-contrast SVG snow marker, independent of emoji fonts and basemap colors.
- const scale=Math.min(2.4,Math.max(1.3,1.65/Math.max(Number(zoom)||1,0.5)));
+ const scale=Math.max(.55,Math.min(.85,1/Math.max(Number(zoom)||1,1)));
  return '<g class="snow-cluster" transform="translate('+shape.x.toFixed(1)+','+shape.y.toFixed(1)+') scale('+scale.toFixed(2)+')" aria-label="Sniego prognozė: '+WMAP_ESC(shape.name)+'">'+
-   '<circle r="20" fill="#003b74" stroke="white" stroke-width="3"></circle>'+
-   '<circle r="16" fill="#117cce"></circle>'+
-   '<g stroke="white" stroke-width="3" stroke-linecap="round">'+
-   '<path d="M-11 0H11 M0-11V11 M-8-8L8 8 M-8 8L8-8"></path>'+
-   '<path d="M-11-4L-7 0L-11 4 M11-4L7 0L11 4 M-4-11L0-7L4-11 M-4 11L0 7L4 11"></path>'+
-   '</g><title>Prognozuojamas sniegas</title></g>';
+   '<g stroke="#075985" stroke-width="4" stroke-linecap="round"><path d="M-9 0H9 M0-9V9 M-6-6L6 6 M-6 6L6-6"></path></g>'+
+   '<g stroke="#e0f2fe" stroke-width="2.5" stroke-linecap="round"><path d="M-9 0H9 M0-9V9 M-6-6L6 6 M-6 6L6-6"></path></g>'+
+   '<title>Prognozuojamas sniegas</title></g>';
 }
 function wmapRadarTiles(meta,frame,proj=wmapProjection(),view=null){
  const host=String(meta?.host||"");
@@ -686,7 +682,7 @@ class LT72WeatherMapCard extends HTMLElement {
    super();
    this.attachShadow({mode:"open"});
    this._config={type:"custom:lt72-weather-map"};
-   this._hass=null;this._regions=null;this._neighbors=null;this._loading=false;this._error="";
+   this._hass=null;this._regions=null;this._municipalities=null;this._neighbors=null;this._loading=false;this._error="";
    this._selected=null;this._mode=null;this._radarIndex=null;this._demoMode=false;
    this._windRaf=null;this._windParticles=[];this._windLastTime=0;
    this._devicePosition=null;this._geolocationError="";
@@ -1140,6 +1136,10 @@ class LT72WeatherMapCard extends HTMLElement {
      // Neighbour borders are optional: never hold up the Lithuanian map.
      this._neighbors=[];
      this._render();
+     fetch(WMAP_URL+"municipalities.json",{signal:AbortSignal.timeout(8000)})
+       .then(response=>{if(!response.ok)throw Error("HTTP "+response.status);return response.json();})
+       .then(data=>{this._municipalities=wmapMunicipalityPaths(data);this._render();})
+       .catch(error=>console.warn("LT72: municipality boundaries unavailable",error));
      fetch(WMAP_URL+"neighbors.json",{signal:AbortSignal.timeout(8000)})
        .then(response=>{if(!response.ok)throw Error("HTTP "+response.status);return response.json();})
        .then(data=>{this._neighbors=wmapNeighborPaths(data);this._render();})
@@ -1278,6 +1278,12 @@ class LT72WeatherMapCard extends HTMLElement {
        '" stroke-dasharray="'+(code==="not_reported"&&!select?"4 3":"none")+
        '" stroke-linejoin="round"></path>'+text+'</g>';
    }).join(""):"";
+   const municipalityHtml=this._municipalities&&this._show("show_alerts")?
+     this._municipalities.map(m=>{
+       const alert=wmapMunicipalityAlert(m.name,m.county,territoryAlerts);
+       if(!alert||!["red","yellow","yellow_after_red"].includes(alert.kodas))return "";
+       return '<path d="'+m.d+'" fill="'+WMAP_LEVELS[alert.kodas][1]+'" fill-opacity=".68" stroke="'+WMAP_LEVELS[alert.kodas][1]+'" stroke-width="1.1" stroke-opacity=".95"><title>'+WMAP_ESC(m.name+" · "+WMAP_LEVELS[alert.kodas][0])+'</title></path>';
+     }).join(""):"";
    const weatherHtml=this._regions?this._regions.map(s=>{
      const w=weather[s.key];
      if(!w)return "";
@@ -1571,7 +1577,7 @@ class LT72WeatherMapCard extends HTMLElement {
              '<rect x="0" y="'+sceneTop+'" width="760" height="'+sceneHeight+'" fill="var(--wmap-sea)"></rect>'+
              neighborBase+detailTiles+satelliteImage+images+
              '<g class="neighbor-outlines">'+neighbors+'</g>'+
-             countryLabels+regionsHtml+weatherHtml+cityTemperatures+forecastSymbols+deviceMarker+inspectMarker+'</svg>'+
+             countryLabels+regionsHtml+municipalityHtml+weatherHtml+cityTemperatures+forecastSymbols+deviceMarker+inspectMarker+'</svg>'+
            (animateWind?'<canvas class="wind-canvas" width="760" height="'+Math.round(sceneHeight)+'" aria-hidden="true"></canvas>':"")+
          '</div></div></div>',
      locationButton,recenterButton,locationPicker,zoomControls,osmCredit,

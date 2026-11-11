@@ -686,7 +686,7 @@ class LT72WeatherMapCard extends HTMLElement {
    this.attachShadow({mode:"open"});
    this._config={type:"custom:lt72-weather-map"};
    this._hass=null;this._regions=null;this._neighbors=null;this._loading=false;this._error="";
-   this._selected=null;this._mode=null;this._radarIndex=null;
+   this._selected=null;this._mode=null;this._radarIndex=null;this._demoMode=false;
    this._windRaf=null;this._windParticles=[];this._windLastTime=0;
    this._devicePosition=null;this._geolocationError="";
    this._locationOverride=null;
@@ -1167,12 +1167,20 @@ class LT72WeatherMapCard extends HTMLElement {
    const activeAlerts=!!data.alerts_available, weatherReady=!!data.weather_available;
    const radarReady=!!data.radar_available;
    const alerts=activeAlerts?data.apskritys||{}:{};
-   const territoryAlerts=activeAlerts&&Array.isArray(data.teritorijos)?data.teritorijos:[];
+   const demo=this._demoMode;
+   const demoTerritories=demo?[
+     {teritorija:"Kauno m. sav.",kodas:"red",paskelbta:"TESTAS"},
+     {teritorija:"Kauno r. sav.",kodas:"yellow",paskelbta:"TESTAS"},
+     {teritorija:"Vilniaus m. sav.",kodas:"yellow_after_red",paskelbta:"TESTAS"},
+     {teritorija:"Klaipėdos r. sav.",kodas:"red",paskelbta:"TESTAS"}]:[];
+   const territoryAlerts=demo?demoTerritories:(activeAlerts&&Array.isArray(data.teritorijos)?data.teritorijos:[]);
    const territoryNotice=territoryAlerts.filter(t=>["red","yellow","yellow_after_red"].includes(t.kodas))
      .map(t=>'<span style="display:inline-block;margin:2px 6px 2px 0;padding:3px 6px;border-radius:5px;border-left:4px solid '+
        (WMAP_LEVELS[t.kodas]?.[1]||"#999")+'">'+WMAP_ESC(t.teritorija||"Nenurodyta teritorija")+
        ' · '+WMAP_ESC(WMAP_LEVELS[t.kodas]?.[0]||t.kodas)+'</span>').join("");
    const weather=weatherReady?data.weather_samples||{}:{};
+   const demoSnowKeys=new Set(["kauno","vilniaus","klaipedos","siauliu","utenos"]);
+   const snowForecast=(key,record)=>demo?demoSnowKeys.has(key):wmapIsSnowForecast(record);
    const radar=radarReady?data.radar||{}:{};
    const frames=Array.isArray(radar.frames)?radar.frames:[];
    if(this._radarIndex===null || this._radarIndex>=frames.length)this._radarIndex=Math.max(0,frames.length-1);
@@ -1185,7 +1193,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const showSatellite=mode==="satellite"||mode==="all";
    const showRadar=(mode==="radar"||mode==="snow"||mode==="all")&&radarReady;
    const showWind=(mode==="wind"||mode==="all")&&weatherReady;
-   const showSnow=(mode==="snow"||mode==="radar"||mode==="all")&&weatherReady;
+   const showSnow=(mode==="snow"||mode==="radar"||mode==="all")&&(weatherReady||demo);
    const showThunder=(mode==="snow"||mode==="radar"||mode==="all")&&weatherReady;
    const chosenFrame=frames[this._radarIndex]||null;
    const projection=wmapProjection();
@@ -1287,10 +1295,10 @@ class LT72WeatherMapCard extends HTMLElement {
      }
      return shapes;
    }).join(""):"";
-   const forecastSymbols=this._regions&&weatherReady ? this._regions.map(s=>{
+   const forecastSymbols=this._regions&&(weatherReady||demo) ? this._regions.map(s=>{
      const w=weather[s.key];
-     if(!w)return "";
-     const snow=showSnow&&this._show("show_snowflakes")&&wmapIsSnowForecast(w);
+     if(!w&&!demo)return "";
+     const snow=showSnow&&snowForecast(s.key,w);
      const thunder=showThunder&&this._show("show_thunderstorms")&&wmapIsThunderForecast(w);
      if(!snow&&!thunder)return "";
      const defs="";
@@ -1442,6 +1450,8 @@ class LT72WeatherMapCard extends HTMLElement {
      '<div class="heads"><b>'+WMAP_ESC(this._config.title||"Oro pavojus ir orų radaras")+
      '</b>'+(this._show("show_subtitle")?'<small>'+WMAP_ESC(statusText)+'</small>':"")+
      '</div></div>':"";
+   const demoButton='<button type="button" data-demo-toggle="1" style="margin:4px 0;padding:7px 12px;border:2px solid '+(demo?'#dc2626':'#64748b')+';border-radius:8px;background:'+(demo?'#fee2e2':'transparent')+';color:'+(demo?'#991b1b':'var(--primary-text-color)')+';font-weight:700">🧪 '+(demo?'Baigti testą':'Testuoti pavojus ir sniegą')+'</button>';
+   const demoBanner=demo?'<div role="status" style="padding:9px;background:#991b1b;color:white;font-weight:800;text-align:center;border-radius:6px;margin:6px 0">🧪 TESTINIS REŽIMAS – NETIKRI PAVOJAI IR SNIEGAS</div>':"";
    const toolbar=this._show("show_toolbar")?'<div class="toolbar">'+buttons+'</div>':"";
    const osmCredit=detailedMap?
      '<div class="osm-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> / <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noopener noreferrer">MapTiler</a></div>':"";
@@ -1563,7 +1573,7 @@ class LT72WeatherMapCard extends HTMLElement {
      (locationNote?'<div class="geo-note">'+WMAP_ESC(locationNote)+'</div>':""),
      inspectText,
      (territoryNotice?'<div class="territory-alerts" style="padding:6px;font-size:12px"><strong>LT72 perspėjimai pagal teritorijas:</strong><div>'+territoryNotice+'</div></div>':""),
-     timeline,precipitationGuide,satelliteGuide,details,legend,explanatory,sourcesMarkup,
+     demoBanner,demoButton,timeline,precipitationGuide,satelliteGuide,details,legend,explanatory,sourcesMarkup,
      '</ha-card>'
    ].join("");
    root.querySelectorAll(".satellite-layer").forEach(node=>{
@@ -1603,6 +1613,11 @@ class LT72WeatherMapCard extends HTMLElement {
    });
    this._attachMapNavigation();
    if(animateWind&&this._regions)this._startWindAnimation(weather);
+   root.querySelectorAll("[data-demo-toggle]").forEach(node=>node.addEventListener("click",()=>{
+     this._demoMode=!this._demoMode;
+     if(this._demoMode)this._mode="all";
+     this._render();
+   }));
    root.querySelectorAll("[data-mode]").forEach(node=>{
      node.addEventListener("click",()=>{
        this._mode=node.getAttribute("data-mode");

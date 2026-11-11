@@ -1133,21 +1133,20 @@ class LT72WeatherMapCard extends HTMLElement {
  async _loadGeometry(){
    this._loading=true;this._render();
    try{
-     const response=await fetch(WMAP_URL+"counties.json");
+     const response=await fetch(WMAP_URL+"counties.json",{signal:AbortSignal.timeout(12000),cache:"no-cache"});
      if(!response.ok)throw Error("HTTP "+response.status);
      this._regions=wmapDecode(await response.json());
      this._error="";
-     try{
-       const neighborResponse=await fetch(WMAP_URL+"neighbors.json");
-       if(!neighborResponse.ok)throw Error("HTTP "+neighborResponse.status);
-       this._neighbors=wmapNeighborPaths(await neighborResponse.json());
-     }catch(error){
-       // Country basemap is optional; do not hide LT72 / weather on failure.
-       this._neighbors=[];
-       console.warn("LT72 Weather Map: neighboring country outlines unavailable",error);
-     }
-   }catch(exc){this._error="Nepavyko įkelti Lietuvos žemėlapio: "+exc.message;}
-   finally{this._loading=false;this._render();}
+     // Neighbour borders are optional: never hold up the Lithuanian map.
+     this._neighbors=[];
+     this._render();
+     fetch(WMAP_URL+"neighbors.json",{signal:AbortSignal.timeout(8000)})
+       .then(response=>{if(!response.ok)throw Error("HTTP "+response.status);return response.json();})
+       .then(data=>{this._neighbors=wmapNeighborPaths(data);this._render();})
+       .catch(error=>console.warn("LT72: optional neighbor map unavailable",error));
+   }catch(exc){
+     this._error="Nepavyko įkelti Lietuvos žemėlapio: "+exc.message;
+   }finally{this._loading=false;this._render();}
  }
  _entity(){
    if(!this._hass)return null;

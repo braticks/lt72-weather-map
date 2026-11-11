@@ -657,6 +657,7 @@ function wmapIsThunderForecast(forecast) {
 }
 function wmapSnowCluster(shape, zoom=1) {
  // High-contrast SVG snow marker, independent of emoji fonts and basemap colors.
+ const scale=Math.min(2.4,Math.max(1.3,1.65/Math.max(Number(zoom)||1,0.5)));
  return '<g class="snow-cluster" transform="translate('+shape.x.toFixed(1)+','+shape.y.toFixed(1)+') scale('+scale.toFixed(2)+')" aria-label="Sniego prognozė: '+WMAP_ESC(shape.name)+'">'+
    '<circle r="20" fill="#003b74" stroke="white" stroke-width="3"></circle>'+
    '<circle r="16" fill="#117cce"></circle>'+

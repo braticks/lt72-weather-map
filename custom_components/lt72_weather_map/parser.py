@@ -125,12 +125,29 @@ def parse_air_alerts(html: str) -> dict[str, dict[str, str | None]]:
 
     results: dict[str, dict[str, str | None]] = {}
     current_regions: list[str] = []
+    territories_detail: list[dict[str, str | None]] = []
+    current_detail: dict[str, str | None] | None = None
     for line in lines[start + 1:end]:
         match = _STATUS_RE.search(line)
         if match:
             level = re.sub(r"\s+", " ", match.group(1).upper()).strip()
             code = _COLOR_CODES[level]
-            territories = _matching_regions(match.group(2))
+            territory_text = match.group(2).strip()
+            territories_detail.append({
+                "teritorija": territory_text,
+                "kodas": code,
+                "paskelbta": None,
+            })
+            current_detail = territories_detail[-1]
+            # County coloring is only valid when the source explicitly names
+            # a whole county (or the entire country). A district must never
+            # silently color its whole county.
+            whole_county = bool(re.search(r"\\bapskrit", _ascii(territory_text)))
+            whole_country = bool(re.search(
+                r"\\b(visoje lietuvoje|visa lietuva|visos lietuvos|lietuvos respublikoje)\\b",
+                _ascii(territory_text),
+            ))
+            territories = _matching_regions(territory_text) if (whole_county or whole_country) else []
             if not territories:
                 # An unrelated or newly named territory must not discard
                 # valid county warnings already parsed from the same page.
@@ -144,16 +161,20 @@ def parse_air_alerts(html: str) -> dict[str, dict[str, str | None]]:
                         "code": code,
                         "published_at": None,
                     }
-        elif current_regions:
+        elif current_detail is not None:
             timestamp = _TIME_RE.search(line)
             if timestamp:
+                if current_detail["paskelbta"] is None:
+                    current_detail["paskelbta"] = timestamp.group(1)
                 for region in current_regions:
                     if results[region]["published_at"] is None:
                         results[region]["published_at"] = timestamp.group(1)
                 current_regions = []
+                current_detail = None
 
     # A page containing status headings but no recognizable counties is
     # an unknown state, not evidence that all counties are safe.
-    if not results and any(_STATUS_RE.search(line) for line in lines[start + 1:end]):
+    if not territories_detail and any(_STATUS_RE.search(line) for line in lines[start + 1:end]):
         raise ValueError("LT72 warning territories could not be identified")
+    results["__territories__"] = territories_detail
     return results

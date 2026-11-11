@@ -460,6 +460,50 @@ function wmapDecode(topo){
  });
 }
 // Natural Earth country boundaries bundled as local, key-free polygons.
+
+function wmapMunicipalityPaths(topo) {
+ const {arcs,transform,objects}=topo;
+ const geometries=objects?.LT_savivaldybes?.geometries;
+ if(!Array.isArray(arcs)||!transform||!Array.isArray(geometries)||geometries.length!==60)
+   throw Error("Neteisingi savivaldybių ribų duomenys");
+ const proj=wmapProjection();
+ const decoded=arcs.map(arc=>{let x=0,y=0;return arc.map(([dx,dy])=>{
+   x+=dx;y+=dy;return [x*transform.scale[0]+transform.translate[0],
+   y*transform.scale[1]+transform.translate[1]];});});
+ const ring=ids=>{const output=[];ids.forEach(id=>{
+   const part=id<0?decoded[~id]?.slice().reverse():decoded[id];
+   if(!part)throw Error("Neteisinga savivaldybės riba");
+   output.push(...(output.length?part.slice(1):part));});return output;};
+ const draw=poly=>poly.map(ids=>ring(ids).map((point,i)=>{
+   const p=proj.xy(...point);return (i?"L":"M")+p[0].toFixed(1)+","+p[1].toFixed(1);
+ }).join(" ")+"Z").join(" ");
+ return geometries.map(g=>({name:g.properties.SAV_PAV,county:g.properties.APS_PAV,
+   d:(g.type==="MultiPolygon"?g.arcs:[g.arcs]).map(draw).join(" ")}));
+}
+function wmapPlain(text) {
+ return String(text||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+   .replace(/[^a-z0-9]+/g," ").trim();
+}
+function wmapMunicipalityMatches(name,territory) {
+ const n=wmapPlain(name),t=wmapPlain(territory);
+ const base=n.replace(/ (m|r) sav$/,"").replace(/ sav$/,"");
+ const kind=n.includes(" m sav")?"m":n.includes(" r sav")?"r":"other";
+ if(!base||!t)return false;
+ const escaped=base.replace(/[.*+?^${}()|[\]\\]/g,"\\function wmapNeighborPaths(geometry, proj=wmapProjection()){");
+ if(kind==="m")return new RegExp("\\b"+escaped+" (?:m|miesto|mieste|miestui|miesta|miestas|miesto savivaldyb|m sav)\\b").test(t);
+ if(kind==="r")return new RegExp("\\b"+escaped+" (?:r|rajono|rajone|rajonui|rajonas|rajona|r sav)\\b").test(t);
+ return new RegExp("\\b"+escaped+"(?: sav| savivaldyb|\\b)").test(t);
+}
+function wmapMunicipalityAlert(name,county,territories) {
+ const matched=territories.filter(t=>wmapMunicipalityMatches(name,t.teritorija));
+ // A county-wide status is valid only when it explicitly names the county.
+ const countyBase=wmapPlain(county).replace(/ apskr.*/,"");
+ const broad=territories.filter(t=>new RegExp("\\b"+countyBase+" apskr").test(wmapPlain(t.teritorija)));
+ const rows=matched.length?matched:broad;
+ const rank={red:4,yellow_after_red:3,yellow:2,white:1};
+ return rows.reduce((best,t)=>!best||(rank[t.kodas]||0)>(rank[best.kodas]||0)?t:best,null);
+}
+
 function wmapNeighborPaths(geometry, proj=wmapProjection()){
  if(!geometry||!Array.isArray(geometry.features))return [];
  return geometry.features.map(country=>{
@@ -612,17 +656,14 @@ function wmapIsThunderForecast(forecast) {
  return [95,96,97,99].includes(Number(forecast.weather_code));
 }
 function wmapSnowCluster(shape) {
- const offsets=[
-   [-34,-28],[-15,-34],[8,-30],[30,-24],
-   [-40,-6],[-21,-6],[0,-9],[22,-3],[41,0],
-   [-35,19],[-13,16],[10,21],[31,23]
- ];
- return '<g class="snow-cluster" aria-label="Prognozuojamas sniegas: '+WMAP_ESC(shape.name)+' apskritis">'+
-   offsets.map(([dx,dy],i)=>
-     '<text class="forecast-snowflake" x="'+(shape.x+dx).toFixed(1)+
-     '" y="'+(shape.y+dy).toFixed(1)+'" font-size="'+(i%3===0?17:13)+
-     '" text-anchor="middle">❄</text>'
-   ).join("")+'</g>';
+ // High-contrast SVG snow marker, independent of emoji fonts and basemap colors.
+ return '<g class="snow-cluster" transform="translate('+shape.x.toFixed(1)+','+
+   shape.y.toFixed(1)+')" aria-label="Sniego prognozė: '+WMAP_ESC(shape.name)+'">'+
+   '<circle r="17" fill="#075985" fill-opacity=".94" stroke="#ffffff" stroke-width="2.5"></circle>'+
+   '<g stroke="#ffffff" stroke-width="2.3" stroke-linecap="round">'+
+   '<path d="M-11 0H11 M0-11V11 M-8-8L8 8 M-8 8L8-8"></path>'+
+   '<path d="M-11-4L-7 0L-11 4 M11-4L7 0L11 4 M-4-11L0-7L4-11 M-4 11L0 7L4 11"></path>'+
+   '</g><title>❄ Prognozuojamas sniegas – Open-Meteo modelis</title></g>';
 }
 function wmapRadarTiles(meta,frame,proj=wmapProjection(),view=null){
  const host=String(meta?.host||"");
@@ -1513,7 +1554,7 @@ class LT72WeatherMapCard extends HTMLElement {
              '<rect x="0" y="'+sceneTop+'" width="760" height="'+sceneHeight+'" fill="var(--wmap-sea)"></rect>'+
              neighborBase+detailTiles+satelliteImage+images+
              '<g class="neighbor-outlines">'+neighbors+'</g>'+
-             countryLabels+regionsHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+inspectMarker+'</svg>'+
+             countryLabels+regionsHtml+municipalityHtml+weatherHtml+forecastSymbols+cityTemperatures+deviceMarker+inspectMarker+'</svg>'+
            (animateWind?'<canvas class="wind-canvas" width="760" height="'+Math.round(sceneHeight)+'" aria-hidden="true"></canvas>':"")+
          '</div></div></div>',
      locationButton,recenterButton,locationPicker,zoomControls,osmCredit,

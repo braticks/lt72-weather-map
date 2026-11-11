@@ -1571,7 +1571,7 @@ class LT72WeatherMapCard extends HTMLElement {
              '<rect x="0" y="'+sceneTop+'" width="760" height="'+sceneHeight+'" fill="var(--wmap-sea)"></rect>'+
              neighborBase+detailTiles+satelliteImage+images+
              '<g class="neighbor-outlines">'+neighbors+'</g>'+
-             countryLabels+regionsHtml+municipalityHtml+weatherHtml+cityTemperatures+forecastSymbols+deviceMarker+inspectMarker+'</svg>'+
+             countryLabels+regionsHtml+weatherHtml+cityTemperatures+forecastSymbols+deviceMarker+inspectMarker+'</svg>'+
            (animateWind?'<canvas class="wind-canvas" width="760" height="'+Math.round(sceneHeight)+'" aria-hidden="true"></canvas>':"")+
          '</div></div></div>',
      locationButton,recenterButton,locationPicker,zoomControls,osmCredit,

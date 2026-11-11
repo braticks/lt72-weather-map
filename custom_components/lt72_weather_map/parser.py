@@ -132,7 +132,10 @@ def parse_air_alerts(html: str) -> dict[str, dict[str, str | None]]:
             code = _COLOR_CODES[level]
             territories = _matching_regions(match.group(2))
             if not territories:
-                raise ValueError("LT72 warning territories could not be identified")
+                # An unrelated or newly named territory must not discard
+                # valid county warnings already parsed from the same page.
+                current_regions = []
+                continue
             current_regions = territories
             for region in territories:
                 # First heading is the currently published status for the county.
@@ -149,4 +152,8 @@ def parse_air_alerts(html: str) -> dict[str, dict[str, str | None]]:
                         results[region]["published_at"] = timestamp.group(1)
                 current_regions = []
 
+    # A page containing status headings but no recognizable counties is
+    # an unknown state, not evidence that all counties are safe.
+    if not results and any(_STATUS_RE.search(line) for line in lines[start + 1:end]):
+        raise ValueError("LT72 warning territories could not be identified")
     return results

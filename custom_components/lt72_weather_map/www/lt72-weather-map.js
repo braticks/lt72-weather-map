@@ -1146,7 +1146,15 @@ class LT72WeatherMapCard extends HTMLElement {
        .catch(error=>console.warn("LT72: optional neighbor map unavailable",error));
    }catch(exc){
      this._error="Nepavyko įkelti Lietuvos žemėlapio: "+exc.message;
-   }finally{this._loading=false;this._render();}
+   }finally{
+     this._loading=false;
+     try{this._render();}catch(error){
+       console.error("LT72 map rendering failed",error);
+       this._error="Žemėlapio atvaizdavimo klaida: "+(error?.message||String(error));
+       const map=this.shadowRoot?.querySelector(".map");
+       if(map)map.innerHTML='<div class="missing">' + WMAP_ESC(this._error) + '</div>';
+     }
+   }
  }
  _entity(){
    if(!this._hass)return null;

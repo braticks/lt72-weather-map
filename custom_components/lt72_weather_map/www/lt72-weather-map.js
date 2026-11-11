@@ -1164,7 +1164,7 @@ class LT72WeatherMapCard extends HTMLElement {
    this._renderPending=false;
    this._stopWindAnimation();
    const entity=this._entity(), data=entity?.attributes||{};
-   const activeAlerts=!!data.alerts_available, weatherReady=!!data.weather_available;
+   const activeAlerts=!!data.alerts_available||this._demoMode, weatherReady=!!data.weather_available;
    const radarReady=!!data.radar_available;
    const alerts=activeAlerts?data.apskritys||{}:{};
    const demo=this._demoMode;

@@ -707,6 +707,7 @@ class LT72WeatherMapCard extends HTMLElement {
    const previousZoom=this._config.default_zoom;
    const previousLocation=JSON.stringify([this._config.location_mode,this._config.location_city,this._config.show_location]);
    this._config={...config};
+   this._demoMode=config.test_mode===true;
    const changedLocation=previousLocation!==JSON.stringify([config.location_mode,config.location_city,config.show_location]);
    if(changedLocation){
      this._locationOverride=null;
@@ -1450,7 +1451,6 @@ class LT72WeatherMapCard extends HTMLElement {
      '<div class="heads"><b>'+WMAP_ESC(this._config.title||"Oro pavojus ir orų radaras")+
      '</b>'+(this._show("show_subtitle")?'<small>'+WMAP_ESC(statusText)+'</small>':"")+
      '</div></div>':"";
-   const demoButton='<button type="button" data-demo-toggle="1" style="margin:4px 0;padding:7px 12px;border:2px solid '+(demo?'#dc2626':'#64748b')+';border-radius:8px;background:'+(demo?'#fee2e2':'transparent')+';color:'+(demo?'#991b1b':'var(--primary-text-color)')+';font-weight:700">🧪 '+(demo?'Baigti testą':'Testuoti pavojus ir sniegą')+'</button>';
    const demoBanner=demo?'<div role="status" style="padding:9px;background:#991b1b;color:white;font-weight:800;text-align:center;border-radius:6px;margin:6px 0">🧪 TESTINIS REŽIMAS – NETIKRI PAVOJAI IR SNIEGAS</div>':"";
    const toolbar=this._show("show_toolbar")?'<div class="toolbar">'+buttons+'</div>':"";
    const osmCredit=detailedMap?
@@ -1573,7 +1573,7 @@ class LT72WeatherMapCard extends HTMLElement {
      (locationNote?'<div class="geo-note">'+WMAP_ESC(locationNote)+'</div>':""),
      inspectText,
      (territoryNotice?'<div class="territory-alerts" style="padding:6px;font-size:12px"><strong>LT72 perspėjimai pagal teritorijas:</strong><div>'+territoryNotice+'</div></div>':""),
-     demoBanner,demoButton,timeline,precipitationGuide,satelliteGuide,details,legend,explanatory,sourcesMarkup,
+     demoBanner,timeline,precipitationGuide,satelliteGuide,details,legend,explanatory,sourcesMarkup,
      '</ha-card>'
    ].join("");
    root.querySelectorAll(".satellite-layer").forEach(node=>{
@@ -1613,11 +1613,6 @@ class LT72WeatherMapCard extends HTMLElement {
    });
    this._attachMapNavigation();
    if(animateWind&&this._regions)this._startWindAnimation(weather);
-   root.querySelectorAll("[data-demo-toggle]").forEach(node=>node.addEventListener("click",()=>{
-     this._demoMode=!this._demoMode;
-     if(this._demoMode)this._mode="all";
-     this._render();
-   }));
    root.querySelectorAll("[data-mode]").forEach(node=>{
      node.addEventListener("click",()=>{
        this._mode=node.getAttribute("data-mode");
@@ -1667,6 +1662,7 @@ class LT72WeatherMapEditor extends HTMLElement {
  _change(key,value){
    const next={...this._config};
    if(key==="compact"){if(value)next.compact=true;else delete next.compact;}
+   else if(key==="test_mode"){if(value)next[key]=true;else delete next[key];}
    else if(key==="show_location_controls"){if(value)next[key]=true;else delete next[key];}
    else if(key.startsWith("show_")||key==="animated_wind"){if(value)delete next[key];else next[key]=false;}
    else{if(value)next[key]=value;else delete next[key];}
@@ -1781,6 +1777,9 @@ class LT72WeatherMapEditor extends HTMLElement {
      ...WMAP_WIND_VISIBILITY.map(([v,label])=>
        '<option value="'+v+'"'+((current.wind_visibility||"strong")===v?' selected':'')+'>'+label+'</option>'),
      '</select></label>',
+     '<h4>Testavimas</h4>',
+     '<label class="compact"><input type="checkbox" data-setting="test_mode"'+(current.test_mode?' checked':'')+'>🧪 Testuoti pavojus ir sniegą</label>',
+     '<p>Įjungus rodomi tik demonstraciniai perspėjimai ir sniegas. Jie nekeičiami Home Assistant jutikliuose. Išjunkite po patikros.</p>',
      '<h4>Išdėstymas</h4><label class="compact"><input type="checkbox" data-setting="compact"'+
        (current.compact?' checked':'')+'>Kompaktiška korta</label>',
      '<p>LT72 pavojaus perspėjimų neatstoja. Radarą teikia RainViewer, prognozes – Open-Meteo. Žemėlapio tiekėjo autorystė lieka matoma pačiame žemėlapyje.</p>'

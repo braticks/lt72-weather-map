@@ -1313,11 +1313,17 @@ class LT72WeatherMapCard extends HTMLElement {
    const forecastSymbols=this._regions&&(weatherReady||demo) ? this._regions.map(s=>{
      const w=weather[s.key];
      if(!w&&!demo)return "";
-     const snow=showSnow&&snowForecast(s.key,w);
+     const snow=showSnow&&demo&&snowForecast(s.key,w);
      const thunder=showThunder&&this._show("show_thunderstorms")&&wmapIsThunderForecast(w);
      if(!snow&&!thunder)return "";
      const defs="";
-     const flakes=snow?wmapSnowCluster(s,this._mapZoom):"";
+     const flakes=snow?(demo?Array.from({length:19},(_,i)=>{
+       const a=i*2.39996323,rad=Math.sqrt((i+.5)/19),dx=Math.cos(a)*rad*49,dy=Math.sin(a)*rad*31;
+       const x=s.x+dx,y=s.y+dy;
+       const size=2.1+(i%4)*.27;
+       return '<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+')" opacity=".92" aria-hidden="true">'+
+         '<path d="M-'+size+' 0H'+size+' M0 -'+size+'V'+size+' M-'+(size*.7)+' -'+(size*.7)+'L'+(size*.7)+' '+(size*.7)+' M-'+(size*.7)+' '+(size*.7)+'L'+(size*.7)+' -'+(size*.7)+'" stroke="#fff" stroke-width=".85" stroke-linecap="round" fill="none"/></g>';
+     }).join(""):""):"";
      const bolt=thunder?'<g class="thunder-forecast" transform="translate('+
        s.x.toFixed(1)+','+(s.y-8).toFixed(1)+')">'+
        '<circle r="15" fill="rgba(26,32,44,.68)" stroke="#facc15" stroke-width="1.5"></circle>'+

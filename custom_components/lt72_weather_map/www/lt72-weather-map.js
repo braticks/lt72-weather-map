@@ -489,7 +489,7 @@ function wmapMunicipalityMatches(name,territory) {
  const base=n.replace(/ (m|r) sav$/,"").replace(/ sav$/,"");
  const kind=n.includes(" m sav")?"m":n.includes(" r sav")?"r":"other";
  if(!base||!t)return false;
- const escaped=base.replace(/[.*+?^${}()|[\]\\]/g,"\\function wmapNeighborPaths(geometry, proj=wmapProjection()){");
+ const escaped=base;
  if(kind==="m")return new RegExp("\\b"+escaped+" (?:m|miesto|mieste|miestui|miesta|miestas|miesto savivaldyb|m sav)\\b").test(t);
  if(kind==="r")return new RegExp("\\b"+escaped+" (?:r|rajono|rajone|rajonui|rajonas|rajona|r sav)\\b").test(t);
  return new RegExp("\\b"+escaped+"(?: sav| savivaldyb|\\b)").test(t);

@@ -53,6 +53,7 @@ class LT72WeatherSensor(CoordinatorEntity[LT72WeatherCoordinator], SensorEntity)
                 for key, record in payload["alerts"].items()
                 if key in COUNTIES
             },
+            "teritorijos": payload["alerts"].get("__territories__", []),
             "alerts_available": payload["alerts_available"],
             "weather_samples": payload["weather"],
             "weather_available": payload["weather_available"],
